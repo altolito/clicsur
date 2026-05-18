@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { analyzeMessage, type AnalysisResult } from "./lib/analyzeMessage";
 
-
-
 export default function App() {
   const [value, setValue] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -71,6 +69,10 @@ export default function App() {
               >
                 Risque {result.risk}
               </h2>
+
+              <p className="mt-2 text-sm text-zinc-400">
+                Score : {result.score}/10
+              </p>
             </div>
 
             <ul className="space-y-3 text-zinc-200">
@@ -79,10 +81,24 @@ export default function App() {
               ))}
             </ul>
 
+            {result.technicalDetails.length > 0 && (
+              <div className="bg-zinc-950/70 border border-zinc-800 rounded-2xl p-4">
+                <p className="font-semibold">Analyse technique</p>
+
+                <ul className="mt-2 space-y-2 text-zinc-400">
+                  {result.technicalDetails.map((detail, index) => (
+                    <li key={index}>• {detail}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="bg-zinc-950/70 border border-zinc-800 rounded-2xl p-4">
               <p className="font-semibold">Recommandation</p>
 
-              <p className="text-zinc-400">{result.recommendation}</p>
+              <p className="text-zinc-400 mt-1">
+                {result.recommendation}
+              </p>
             </div>
           </div>
         )}

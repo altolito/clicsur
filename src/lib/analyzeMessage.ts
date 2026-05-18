@@ -4,20 +4,94 @@ export type AnalysisResult = {
   score: number;
   alerts: string[];
   recommendation: string;
+  technicalDetails: string[];
 };
+
+function extractDomain(rawUrl: string): string | null {
+  try {
+    const normalizedUrl = rawUrl.startsWith("http")
+      ? rawUrl
+      : `https://${rawUrl}`;
+
+    return new URL(normalizedUrl).hostname;
+  } catch {
+    return null;
+  }
+}
 
 export function analyzeMessage(text: string): AnalysisResult {
   const lower = text.toLowerCase();
 
   let score = 0;
   const alerts: string[] = [];
+  const technicalDetails: string[] = [];
 
-  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+  const urlRegex =
+    /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9-]+\.[a-z]{2,}(\/[^\s]*)?)/gi;
+
   const urls = text.match(urlRegex) || [];
 
   if (urls.length > 0) {
     score += 2;
     alerts.push("Un lien a été détecté dans le message.");
+
+    const firstUrl = urls[0];
+
+    if (firstUrl) {
+      const domain = extractDomain(firstUrl);
+
+      if (domain) {
+        technicalDetails.push(`Domaine détecté : ${domain}`);
+
+        if (firstUrl.startsWith("http://")) {
+          score += 2;
+          alerts.push("Le lien utilise HTTP au lieu de HTTPS.");
+          technicalDetails.push("Protocole : HTTP non sécurisé");
+        } else {
+          technicalDetails.push("Protocole : HTTPS ou URL normalisée");
+        }
+
+        if (domain.length > 30) {
+          score += 2;
+          alerts.push("Le nom de domaine est anormalement long.");
+          technicalDetails.push("Domaine long : oui");
+        } else {
+          technicalDetails.push("Domaine long : non");
+        }
+
+        if (/\d/.test(domain)) {
+          score += 1;
+          alerts.push("Le domaine contient des chiffres.");
+          technicalDetails.push("Chiffres dans le domaine : oui");
+        }
+
+        if (domain.split("-").length > 2) {
+          score += 1;
+          alerts.push("Le domaine contient plusieurs tirets.");
+          technicalDetails.push("Nombreux tirets dans le domaine : oui");
+        }
+
+        const suspiciousExtensions = [
+          ".xyz",
+          ".top",
+          ".click",
+          ".shop",
+          ".info",
+        ];
+
+        if (
+          suspiciousExtensions.some((extension) =>
+            domain.endsWith(extension)
+          )
+        ) {
+          score += 2;
+          alerts.push(
+            "Le domaine utilise une extension souvent présente dans des campagnes douteuses."
+          );
+          technicalDetails.push("Extension à surveiller : oui");
+        }
+      }
+    }
   }
 
   if (urls.some((url) => url.length > 80)) {
@@ -35,17 +109,6 @@ export function analyzeMessage(text: string): AnalysisResult {
   ) {
     score += 3;
     alerts.push("Le lien semble utiliser un raccourcisseur d’URL.");
-  }
-
-  if (
-    lower.includes(".xyz") ||
-    lower.includes(".top") ||
-    lower.includes(".click") ||
-    lower.includes(".shop") ||
-    lower.includes(".info")
-  ) {
-    score += 2;
-    alerts.push("Le domaine utilise une extension souvent présente dans des campagnes douteuses.");
   }
 
   if (
@@ -107,11 +170,6 @@ export function analyzeMessage(text: string): AnalysisResult {
     alerts.push("Le message utilise une promesse de gain ou de récompense.");
   }
 
-  if (/[^\x00-\x7F]/.test(text) && /[а-яА-Я]/.test(text)) {
-    score += 3;
-    alerts.push("Le message contient des caractères inhabituels pouvant imiter des lettres classiques.");
-  }
-
   const finalScore = Math.min(score, 10);
 
   if (finalScore <= 2) {
@@ -120,7 +178,9 @@ export function analyzeMessage(text: string): AnalysisResult {
       color: "emerald",
       score: finalScore,
       alerts: alerts.length ? alerts : ["Aucun signal critique détecté."],
-      recommendation: "Le contenu semble relativement sûr, mais restez vigilant.",
+      recommendation:
+        "Le contenu semble relativement sûr, mais restez vigilant.",
+      technicalDetails,
     };
   }
 
@@ -130,7 +190,9 @@ export function analyzeMessage(text: string): AnalysisResult {
       color: "yellow",
       score: finalScore,
       alerts,
-      recommendation: "Vérifiez l’expéditeur et évitez de cliquer trop rapidement.",
+      recommendation:
+        "Vérifiez l’expéditeur et évitez de cliquer trop rapidement.",
+      technicalDetails,
     };
   }
 
@@ -141,5 +203,6 @@ export function analyzeMessage(text: string): AnalysisResult {
     alerts,
     recommendation:
       "Ne cliquez pas directement. Vérifiez l’information depuis le site officiel ou un canal connu.",
+    technicalDetails,
   };
 }
