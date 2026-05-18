@@ -1,25 +1,63 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { analyzeMessage, type AnalysisResult } from "./lib/analyzeMessage";
+
+type HistoryItem = {
+  id: string;
+  text: string;
+  risk: AnalysisResult["risk"];
+  color: AnalysisResult["color"];
+  score: number;
+  createdAt: string;
+};
 
 const examples = [
   "Votre colis est bloqué. Paiement de 1,99€ requis sous 24h : http://suivi-livraison-client.xyz",
-
   "Bonjour, votre compte Netflix nécessite une reconnexion immédiate : http://netflix-verification.click",
-
   "Félicitations, vous avez gagné un iPhone. Cliquez ici pour recevoir votre cadeau.",
-
   "Bonjour maman, j’ai changé de numéro. Peux-tu m’envoyer un virement rapidement ?",
 ];
 
 export default function App() {
   const [value, setValue] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const resultRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const savedHistory = localStorage.getItem("clicsur-history");
+
+    if (savedHistory) {
+      setHistory(JSON.parse(savedHistory));
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("clicsur-history", JSON.stringify(history));
+  }, [history]);
 
   function handleAnalyze() {
     if (!value.trim()) return;
 
     const analysis = analyzeMessage(value);
     setResult(analysis);
+
+    const item: HistoryItem = {
+      id: crypto.randomUUID(),
+      text: value,
+      risk: analysis.risk,
+      color: analysis.color,
+      score: analysis.score,
+      createdAt: new Date().toLocaleString("fr-FR"),
+    };
+
+    setHistory((current) => [item, ...current].slice(0, 5));
+
+    setTimeout(() => {
+      resultRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 100);
   }
 
   function loadExample(example: string) {
@@ -33,34 +71,53 @@ export default function App() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-white px-6 py-10">
-      <section className="mx-auto max-w-4xl space-y-8">
+    <main className="min-h-screen bg-slate-50 text-slate-900 px-6 py-10">
+      <section className="mx-auto max-w-5xl space-y-10">
+        <header className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-bold">
+              C
+            </div>
+
+            <div>
+              <p className="font-semibold text-lg">ClicSûr</p>
+              <p className="text-sm text-slate-500">
+                Protection numérique famille
+              </p>
+            </div>
+          </div>
+
+          <div className="hidden md:flex items-center gap-2 text-sm text-slate-500">
+            <div className="h-2 w-2 rounded-full bg-emerald-500" />
+            Analyse instantanée
+          </div>
+        </header>
+
         <div className="text-center space-y-5">
-          <p className="text-sm font-medium text-emerald-400">
-            Protection numérique famille
-          </p>
+          <div className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-4 py-2 text-sm font-medium">
+            Détection de phishing et d’arnaques numériques
+          </div>
 
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-tight">
-            Analysez un lien ou un message suspect
+            Vérifiez un lien ou un message avant de cliquer
           </h1>
 
-          <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
-            ClicSûr détecte les signaux fréquents des SMS frauduleux,
-            faux emails et liens de phishing avant que vous ne cliquiez.
+          <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed">
+            ClicSûr aide les familles à repérer les SMS frauduleux,
+            faux emails et liens suspects grâce à une analyse simple
+            et compréhensible.
           </p>
         </div>
 
         <div className="grid gap-3">
-          <p className="text-sm text-zinc-500">
-            Exemples rapides :
-          </p>
+          <p className="text-sm text-slate-500">Exemples fréquents :</p>
 
           <div className="grid md:grid-cols-2 gap-3">
             {examples.map((example, index) => (
               <button
                 key={index}
                 onClick={() => loadExample(example)}
-                className="text-left bg-zinc-900 hover:bg-zinc-800 transition border border-zinc-800 rounded-2xl p-4 text-sm text-zinc-300"
+                className="text-left bg-white hover:bg-slate-100 transition border border-slate-200 rounded-2xl p-4 text-sm text-slate-700 shadow-sm"
               >
                 {example}
               </button>
@@ -68,25 +125,25 @@ export default function App() {
           </div>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 shadow-2xl">
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xl shadow-slate-200/50">
           <textarea
             value={value}
             onChange={(event) => setValue(event.target.value)}
             placeholder="Collez ici un SMS, un email ou une URL..."
-            className="min-h-40 w-full resize-none bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-4 text-white outline-none focus:border-emerald-500"
+            className="min-h-40 w-full resize-none bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 text-slate-900 outline-none focus:border-blue-500"
           />
 
           <div className="flex gap-3 mt-4">
             <button
               onClick={handleAnalyze}
-              className="flex-1 bg-emerald-400 text-zinc-950 font-semibold rounded-2xl py-3 hover:bg-emerald-300 transition"
+              className="flex-1 bg-blue-600 text-white font-semibold rounded-2xl py-3 hover:bg-blue-700 transition"
             >
               Analyser le risque
             </button>
 
             <button
               onClick={resetAnalysis}
-              className="px-6 bg-zinc-800 hover:bg-zinc-700 transition rounded-2xl"
+              className="px-6 bg-slate-100 hover:bg-slate-200 transition rounded-2xl text-slate-700"
             >
               Reset
             </button>
@@ -95,27 +152,26 @@ export default function App() {
 
         {result && (
           <div
-            className={`rounded-3xl p-6 space-y-5 border transition-all duration-300 ${
+            ref={resultRef}
+            className={`rounded-3xl p-6 space-y-5 border shadow-lg scroll-mt-6 ${
               result.color === "red"
-                ? "bg-red-950/40 border-red-900"
+                ? "bg-red-50 border-red-200"
                 : result.color === "yellow"
-                ? "bg-yellow-950/30 border-yellow-800"
-                : "bg-emerald-950/30 border-emerald-800"
+                ? "bg-yellow-50 border-yellow-200"
+                : "bg-emerald-50 border-emerald-200"
             }`}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-zinc-300">
-                  Niveau de risque
-                </p>
+                <p className="text-sm text-slate-500">Niveau de risque</p>
 
                 <h2
                   className={`text-4xl font-bold ${
                     result.color === "red"
-                      ? "text-red-200"
+                      ? "text-red-700"
                       : result.color === "yellow"
-                      ? "text-yellow-200"
-                      : "text-emerald-200"
+                      ? "text-yellow-700"
+                      : "text-emerald-700"
                   }`}
                 >
                   Risque {result.risk}
@@ -123,28 +179,28 @@ export default function App() {
               </div>
 
               <div className="text-right">
-                <p className="text-sm text-zinc-400">Score</p>
+                <p className="text-sm text-slate-500">Score</p>
 
-                <p className="text-5xl font-bold">
+                <p className="text-5xl font-bold text-slate-900">
                   {result.score}
-                  <span className="text-zinc-500 text-2xl">/10</span>
+                  <span className="text-slate-400 text-2xl">/10</span>
                 </p>
               </div>
             </div>
 
-            <ul className="space-y-3 text-zinc-200">
+            <ul className="space-y-3 text-slate-700">
               {result.alerts.map((alert, index) => (
                 <li key={index}>⚠️ {alert}</li>
               ))}
             </ul>
 
             {result.technicalDetails.length > 0 && (
-              <div className="bg-zinc-950/70 border border-zinc-800 rounded-2xl p-4">
-                <p className="font-semibold">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                <p className="font-semibold text-slate-900">
                   Analyse technique
                 </p>
 
-                <ul className="mt-2 space-y-2 text-zinc-400">
+                <ul className="mt-2 space-y-2 text-slate-600">
                   {result.technicalDetails.map((detail, index) => (
                     <li key={index}>• {detail}</li>
                   ))}
@@ -152,19 +208,73 @@ export default function App() {
               </div>
             )}
 
-            <div className="bg-zinc-950/70 border border-zinc-800 rounded-2xl p-4">
-              <p className="font-semibold">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4">
+              <p className="font-semibold text-slate-900">
                 Recommandation
               </p>
 
-              <p className="text-zinc-400 mt-1">
+              <p className="text-slate-600 mt-1">
                 {result.recommendation}
               </p>
             </div>
           </div>
         )}
 
-        <div className="text-center text-sm text-zinc-600 max-w-2xl mx-auto">
+        {history.length > 0 && (
+          <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="font-semibold text-lg">
+                Analyses récentes
+              </h2>
+
+              <button
+                onClick={() => setHistory([])}
+                className="text-sm text-slate-500 hover:text-slate-900"
+              >
+                Effacer
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {history.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-start justify-between gap-4 border border-slate-100 rounded-2xl p-4"
+                >
+                  <div>
+                    <p className="text-sm text-slate-500">
+                      {item.createdAt}
+                    </p>
+
+                    <p className="mt-1 text-slate-700 line-clamp-2">
+                      {item.text}
+                    </p>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${
+                        item.color === "red"
+                          ? "bg-red-100 text-red-700"
+                          : item.color === "yellow"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {item.risk}
+                    </span>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                      {item.score}/10
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="text-center text-sm text-slate-500 max-w-2xl mx-auto leading-relaxed">
           ClicSûr fournit une aide à la détection mais ne garantit pas
           qu’un contenu soit totalement sûr ou frauduleux.
           Vérifiez toujours les informations sensibles via les canaux officiels.
