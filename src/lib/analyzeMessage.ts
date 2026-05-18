@@ -6,6 +6,7 @@ export type AnalysisResult = {
   recommendation: string;
   technicalDetails: string[];
   category: string;
+  confidenceMessage: string;
 };
 
 function extractDomain(rawUrl: string): string | null {
@@ -186,6 +187,16 @@ export function analyzeMessage(text: string): AnalysisResult {
     alerts.push("Le message ressemble à une demande urgente venant d’un proche.");
   }
 
+  let confidenceMessage = "Aucun signal majeur détecté.";
+
+  if (score >= 8) {
+    confidenceMessage = "Très probablement frauduleux.";
+  } else if (score >= 5) {
+    confidenceMessage = "Plusieurs signaux suspects détectés.";
+  } else if (score >= 3) {
+    confidenceMessage = "Quelques éléments méritent de la prudence.";
+  }
+
   const finalScore = Math.min(score, 10);
 
   if (finalScore <= 2) {
@@ -198,6 +209,7 @@ export function analyzeMessage(text: string): AnalysisResult {
         "Le contenu semble relativement sûr, mais restez vigilant.",
       technicalDetails,
       category,
+      confidenceMessage,
     };
   }
 
@@ -211,6 +223,7 @@ export function analyzeMessage(text: string): AnalysisResult {
         "Vérifiez l’expéditeur et évitez de cliquer trop rapidement.",
       technicalDetails,
       category,
+      confidenceMessage,
     };
   }
 
@@ -223,5 +236,6 @@ export function analyzeMessage(text: string): AnalysisResult {
       "Ne cliquez pas directement. Vérifiez l’information depuis le site officiel ou un canal connu.",
     technicalDetails,
     category,
+    confidenceMessage,
   };
 }

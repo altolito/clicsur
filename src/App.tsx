@@ -7,6 +7,7 @@ type HistoryItem = {
   risk: AnalysisResult["risk"];
   color: AnalysisResult["color"];
   score: number;
+  category: string;
   createdAt: string;
 };
 
@@ -47,6 +48,7 @@ export default function App() {
       risk: analysis.risk,
       color: analysis.color,
       score: analysis.score,
+      category: analysis.category,
       createdAt: new Date().toLocaleString("fr-FR"),
     };
 
@@ -103,9 +105,8 @@ export default function App() {
           </h1>
 
           <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed">
-            ClicSûr aide les familles à repérer les SMS frauduleux,
-            faux emails et liens suspects grâce à une analyse simple
-            et compréhensible.
+            ClicSûr aide les familles à repérer les SMS frauduleux, faux emails
+            et liens suspects grâce à une analyse simple et compréhensible.
           </p>
         </div>
 
@@ -163,12 +164,14 @@ export default function App() {
           >
             <div className="flex items-center justify-between">
               <div>
+                <p className="text-sm text-slate-500">Niveau de risque</p>
+
                 <p className="mt-2 inline-flex rounded-full bg-white/70 px-3 py-1 text-sm font-medium text-slate-700 border border-slate-200">
-                    {result.category}
-                  </p>
+                  {result.category}
+                </p>
 
                 <h2
-                  className={`text-4xl font-bold ${
+                  className={`mt-3 text-4xl font-bold ${
                     result.color === "red"
                       ? "text-red-700"
                       : result.color === "yellow"
@@ -178,6 +181,10 @@ export default function App() {
                 >
                   Risque {result.risk}
                 </h2>
+
+                <p className="mt-2 text-slate-600 font-medium">
+                  {result.confidenceMessage}
+                </p>
               </div>
 
               <div className="text-right">
@@ -211,9 +218,7 @@ export default function App() {
             )}
 
             <div className="bg-white border border-slate-200 rounded-2xl p-4">
-              <p className="font-semibold text-slate-900">
-                Recommandation
-              </p>
+              <p className="font-semibold text-slate-900">Recommandation</p>
 
               <p className="text-slate-600 mt-1">
                 {result.recommendation}
@@ -225,9 +230,7 @@ export default function App() {
         {history.length > 0 && (
           <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="font-semibold text-lg">
-                Analyses récentes
-              </h2>
+              <h2 className="font-semibold text-lg">Analyses récentes</h2>
 
               <button
                 onClick={() => setHistory([])}
@@ -246,6 +249,10 @@ export default function App() {
                   <div>
                     <p className="text-sm text-slate-500">
                       {item.createdAt}
+                    </p>
+
+                    <p className="mt-1 text-sm font-medium text-slate-600">
+                      {item.category}
                     </p>
 
                     <p className="mt-1 text-slate-700 line-clamp-2">
@@ -277,9 +284,9 @@ export default function App() {
         )}
 
         <div className="text-center text-sm text-slate-500 max-w-2xl mx-auto leading-relaxed">
-          ClicSûr fournit une aide à la détection mais ne garantit pas
-          qu’un contenu soit totalement sûr ou frauduleux.
-          Vérifiez toujours les informations sensibles via les canaux officiels.
+          ClicSûr fournit une aide à la détection mais ne garantit pas qu’un
+          contenu soit totalement sûr ou frauduleux. Vérifiez toujours les
+          informations sensibles via les canaux officiels.
         </div>
       </section>
     </main>
