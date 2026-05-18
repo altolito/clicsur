@@ -163,7 +163,9 @@ export default function App() {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-500">Niveau de risque</p>
+                <p className="mt-2 inline-flex rounded-full bg-white/70 px-3 py-1 text-sm font-medium text-slate-700 border border-slate-200">
+                    {result.category}
+                  </p>
 
                 <h2
                   className={`text-4xl font-bold ${

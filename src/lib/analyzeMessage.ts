@@ -5,6 +5,7 @@ export type AnalysisResult = {
   alerts: string[];
   recommendation: string;
   technicalDetails: string[];
+  category: string;
 };
 
 function extractDomain(rawUrl: string): string | null {
@@ -23,6 +24,7 @@ export function analyzeMessage(text: string): AnalysisResult {
   const lower = text.toLowerCase();
 
   let score = 0;
+  let category = "Analyse générale";
   const alerts: string[] = [];
   const technicalDetails: string[] = [];
 
@@ -80,9 +82,7 @@ export function analyzeMessage(text: string): AnalysisResult {
         ];
 
         if (
-          suspiciousExtensions.some((extension) =>
-            domain.endsWith(extension)
-          )
+          suspiciousExtensions.some((extension) => domain.endsWith(extension))
         ) {
           score += 2;
           alerts.push(
@@ -132,6 +132,7 @@ export function analyzeMessage(text: string): AnalysisResult {
     lower.includes("régulariser")
   ) {
     score += 3;
+    category = "Demande de paiement suspecte";
     alerts.push("Une demande de paiement a été détectée.");
   }
 
@@ -144,6 +145,7 @@ export function analyzeMessage(text: string): AnalysisResult {
     lower.includes("confirmez votre compte")
   ) {
     score += 3;
+    category = "Compte ou identifiants menacés";
     alerts.push("Le message évoque des informations sensibles.");
   }
 
@@ -157,6 +159,7 @@ export function analyzeMessage(text: string): AnalysisResult {
     lower.includes("carte vitale")
   ) {
     score += 2;
+    category = "Arnaque au colis, service ou administration";
     alerts.push("Le message ressemble à un scénario d’arnaque courant.");
   }
 
@@ -167,7 +170,20 @@ export function analyzeMessage(text: string): AnalysisResult {
     lower.includes("récompense")
   ) {
     score += 2;
+    category = "Faux gain ou cadeau";
     alerts.push("Le message utilise une promesse de gain ou de récompense.");
+  }
+
+  if (
+    lower.includes("maman") ||
+    lower.includes("papa") ||
+    lower.includes("j’ai changé de numéro") ||
+    lower.includes("j'ai changé de numéro") ||
+    lower.includes("virement rapidement")
+  ) {
+    score += 3;
+    category = "Arnaque au proche";
+    alerts.push("Le message ressemble à une demande urgente venant d’un proche.");
   }
 
   const finalScore = Math.min(score, 10);
@@ -181,6 +197,7 @@ export function analyzeMessage(text: string): AnalysisResult {
       recommendation:
         "Le contenu semble relativement sûr, mais restez vigilant.",
       technicalDetails,
+      category,
     };
   }
 
@@ -193,6 +210,7 @@ export function analyzeMessage(text: string): AnalysisResult {
       recommendation:
         "Vérifiez l’expéditeur et évitez de cliquer trop rapidement.",
       technicalDetails,
+      category,
     };
   }
 
@@ -204,5 +222,6 @@ export function analyzeMessage(text: string): AnalysisResult {
     recommendation:
       "Ne cliquez pas directement. Vérifiez l’information depuis le site officiel ou un canal connu.",
     technicalDetails,
+    category,
   };
 }
