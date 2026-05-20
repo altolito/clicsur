@@ -25,10 +25,13 @@ export default function App() {
   const resultRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const savedHistory = localStorage.getItem("clicsur-history");
-
-    if (savedHistory) {
-      setHistory(JSON.parse(savedHistory));
+    try {
+      const savedHistory = localStorage.getItem("clicsur-history");
+      if (savedHistory) {
+        setHistory(JSON.parse(savedHistory));
+      }
+    } catch {
+      localStorage.removeItem("clicsur-history");
     }
   }, []);
 
@@ -36,15 +39,18 @@ export default function App() {
     localStorage.setItem("clicsur-history", JSON.stringify(history));
   }, [history]);
 
-  function handleAnalyze() {
-    if (!value.trim()) return;
+  function handleAnalyze(customText?: string) {
+    const textToAnalyze = customText ?? value;
 
-    const analysis = analyzeMessage(value);
+    if (!textToAnalyze.trim()) return;
+
+    const analysis = analyzeMessage(textToAnalyze);
     setResult(analysis);
+    setValue(textToAnalyze);
 
     const item: HistoryItem = {
       id: crypto.randomUUID(),
-      text: value,
+      text: textToAnalyze,
       risk: analysis.risk,
       color: analysis.color,
       score: analysis.score,
@@ -52,7 +58,7 @@ export default function App() {
       createdAt: new Date().toLocaleString("fr-FR"),
     };
 
-    setHistory((current) => [item, ...current].slice(0, 5));
+    setHistory((current) => [item, ...current].slice(0, 8));
 
     setTimeout(() => {
       resultRef.current?.scrollIntoView({
@@ -70,6 +76,29 @@ export default function App() {
   function resetAnalysis() {
     setValue("");
     setResult(null);
+  }
+
+  function copyReport() {
+    if (!result) return;
+
+    const report = `
+Analyse ClicSûr
+
+Niveau de risque : ${result.risk}
+Score : ${result.score}/10
+Catégorie : ${result.category}
+
+Conclusion :
+${result.confidenceMessage}
+
+Alertes :
+${result.alerts.map((alert) => `- ${alert}`).join("\n")}
+
+Recommandation :
+${result.recommendation}
+`.trim();
+
+    navigator.clipboard.writeText(report);
   }
 
   return (
@@ -91,7 +120,7 @@ export default function App() {
 
           <div className="hidden md:flex items-center gap-2 text-sm text-slate-500">
             <div className="h-2 w-2 rounded-full bg-emerald-500" />
-            Analyse instantanée
+            Analyse locale active
           </div>
         </header>
 
@@ -105,8 +134,8 @@ export default function App() {
           </h1>
 
           <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed">
-            ClicSûr aide les familles à repérer les SMS frauduleux, faux emails
-            et liens suspects grâce à une analyse simple et compréhensible.
+            ClicSûr aide à repérer les SMS frauduleux, faux emails, arnaques au
+            colis, fausses banques et liens suspects.
           </p>
         </div>
 
@@ -136,7 +165,7 @@ export default function App() {
 
           <div className="flex gap-3 mt-4">
             <button
-              onClick={handleAnalyze}
+              onClick={() => handleAnalyze()}
               className="flex-1 bg-blue-600 text-white font-semibold rounded-2xl py-3 hover:bg-blue-700 transition"
             >
               Analyser le risque
@@ -162,7 +191,7 @@ export default function App() {
                 : "bg-emerald-50 border-emerald-200"
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between gap-6">
               <div>
                 <p className="text-sm text-slate-500">Niveau de risque</p>
 
@@ -187,7 +216,7 @@ export default function App() {
                 </p>
               </div>
 
-              <div className="text-right">
+              <div className="text-right shrink-0">
                 <p className="text-sm text-slate-500">Score</p>
 
                 <p className="text-5xl font-bold text-slate-900">
@@ -220,9 +249,16 @@ export default function App() {
             <div className="bg-white border border-slate-200 rounded-2xl p-4">
               <p className="font-semibold text-slate-900">Recommandation</p>
 
-              <p className="text-slate-600 mt-1">
-                {result.recommendation}
-              </p>
+              <p className="text-slate-600 mt-1">{result.recommendation}</p>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={copyReport}
+                className="bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2 text-sm text-slate-700 transition"
+              >
+                Copier le rapport
+              </button>
             </div>
           </div>
         )}
@@ -230,7 +266,12 @@ export default function App() {
         {history.length > 0 && (
           <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="font-semibold text-lg">Analyses récentes</h2>
+              <div>
+                <h2 className="font-semibold text-lg">Analyses récentes</h2>
+                <p className="text-sm text-slate-500">
+                  Historique conservé uniquement sur cet appareil.
+                </p>
+              </div>
 
               <button
                 onClick={() => setHistory([])}
@@ -247,9 +288,7 @@ export default function App() {
                   className="flex items-start justify-between gap-4 border border-slate-100 rounded-2xl p-4"
                 >
                   <div>
-                    <p className="text-sm text-slate-500">
-                      {item.createdAt}
-                    </p>
+                    <p className="text-sm text-slate-500">{item.createdAt}</p>
 
                     <p className="mt-1 text-sm font-medium text-slate-600">
                       {item.category}
@@ -258,6 +297,13 @@ export default function App() {
                     <p className="mt-1 text-slate-700 line-clamp-2">
                       {item.text}
                     </p>
+
+                    <button
+                      onClick={() => handleAnalyze(item.text)}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Réanalyser
+                    </button>
                   </div>
 
                   <div className="text-right shrink-0">
@@ -285,8 +331,9 @@ export default function App() {
 
         <div className="text-center text-sm text-slate-500 max-w-2xl mx-auto leading-relaxed">
           ClicSûr fournit une aide à la détection mais ne garantit pas qu’un
-          contenu soit totalement sûr ou frauduleux. Vérifiez toujours les
-          informations sensibles via les canaux officiels.
+          contenu soit totalement sûr ou frauduleux. Ne communiquez jamais vos
+          mots de passe, codes bancaires ou informations sensibles depuis un lien
+          reçu par message.
         </div>
       </section>
     </main>
