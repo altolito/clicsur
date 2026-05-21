@@ -1,3 +1,5 @@
+import { analyzeDomain, extractDomain } from "./domainAnalysis";
+
 export type AnalysisResult = {
   risk: "Faible" | "Moyen" | "Élevé";
   color: "emerald" | "yellow" | "red";
@@ -8,29 +10,6 @@ export type AnalysisResult = {
   category: string;
   confidenceMessage: string;
 };
-
-const SUSPICIOUS_EXTENSIONS = [
-  ".xyz",
-  ".top",
-  ".click",
-  ".shop",
-  ".info",
-  ".online",
-  ".site",
-  ".live",
-  ".support",
-];
-
-const URL_SHORTENERS = [
-  "bit.ly",
-  "tinyurl",
-  "t.co",
-  "goo.gl",
-  "cutt.ly",
-  "shorturl",
-  "ow.ly",
-  "is.gd",
-];
 
 const COMMON_BRANDS = [
   "ameli",
@@ -49,21 +28,6 @@ const COMMON_BRANDS = [
   "cpam",
   "cpf",
 ];
-
-function extractDomain(rawUrl: string): string | null {
-  try {
-    const cleanedUrl = rawUrl.trim().replace(/[),.;!?]+$/g, "");
-
-    const normalizedUrl =
-      cleanedUrl.startsWith("http://") || cleanedUrl.startsWith("https://")
-        ? cleanedUrl
-        : `https://${cleanedUrl}`;
-
-    return new URL(normalizedUrl).hostname.replace(/^www\./, "");
-  } catch {
-    return null;
-  }
-}
 
 function includesAny(text: string, keywords: string[]) {
   return keywords.some((keyword) => text.includes(keyword));
@@ -90,7 +54,8 @@ export function analyzeMessage(text: string): AnalysisResult {
       color: "emerald",
       score: 0,
       alerts: ["Aucun texte à analyser."],
-      recommendation: "Collez un SMS, un email ou un message suspect pour lancer l’analyse.",
+      recommendation:
+        "Collez un SMS, un email ou un message suspect pour lancer l’analyse.",
       technicalDetails: [],
       category: "Aucune analyse",
       confidenceMessage: "Analyse impossible sans contenu.",
@@ -111,45 +76,29 @@ export function analyzeMessage(text: string): AnalysisResult {
     technicalDetails.push(`Nombre de liens détectés : ${urls.length}`);
   }
 
-  domains.forEach((domain) => {
-    technicalDetails.push(`Domaine détecté : ${domain}`);
+  urls.forEach((url) => {
+    const domainAnalysis = analyzeDomain(url);
 
-    if (domain.length > 30) {
-      score += 2;
-      pushUnique(alerts, "Le nom de domaine est anormalement long.");
-      technicalDetails.push(`Domaine long détecté : ${domain}`);
-    }
+    if (!domainAnalysis) return;
 
-    if (/\d/.test(domain)) {
-      score += 1;
-      pushUnique(alerts, "Le domaine contient des chiffres.");
-    }
+    score += domainAnalysis.scoreImpact;
 
-    if (domain.split("-").length > 2) {
-      score += 1;
-      pushUnique(alerts, "Le domaine contient plusieurs tirets.");
-    }
+    domainAnalysis.alerts.forEach((alert) => {
+      pushUnique(alerts, alert);
+    });
 
-    if (SUSPICIOUS_EXTENSIONS.some((extension) => domain.endsWith(extension))) {
-      score += 2;
-      pushUnique(
-        alerts,
-        "Le domaine utilise une extension souvent présente dans des campagnes douteuses."
-      );
-    }
+    domainAnalysis.technicalDetails.forEach((detail) => {
+      pushUnique(technicalDetails, detail);
+    });
 
-    if (URL_SHORTENERS.some((shortener) => domain.includes(shortener))) {
-      score += 3;
-      pushUnique(alerts, "Le lien semble utiliser un raccourcisseur d’URL.");
+    if (
+      domainAnalysis.alerts.some((alert) =>
+        alert.toLowerCase().includes("raccourcisseur")
+      )
+    ) {
       category = "Lien masqué ou raccourci";
     }
   });
-
-  if (urls.some((url) => url.startsWith("http://"))) {
-    score += 2;
-    pushUnique(alerts, "Le lien utilise HTTP au lieu de HTTPS.");
-    technicalDetails.push("Protocole HTTP non sécurisé détecté.");
-  }
 
   if (urls.some((url) => url.length > 80)) {
     score += 2;
@@ -194,7 +143,10 @@ export function analyzeMessage(text: string): AnalysisResult {
   ) {
     score += 3;
     category = "Demande de paiement suspecte";
-    pushUnique(alerts, "Une demande de paiement ou de régularisation a été détectée.");
+    pushUnique(
+      alerts,
+      "Une demande de paiement ou de régularisation a été détectée."
+    );
   }
 
   if (
@@ -230,7 +182,10 @@ export function analyzeMessage(text: string): AnalysisResult {
   ) {
     score += 2;
     category = "Arnaque au colis";
-    pushUnique(alerts, "Le message ressemble à une arnaque liée à un colis ou une livraison.");
+    pushUnique(
+      alerts,
+      "Le message ressemble à une arnaque liée à un colis ou une livraison."
+    );
   }
 
   if (
@@ -250,7 +205,10 @@ export function analyzeMessage(text: string): AnalysisResult {
   ) {
     score += 2;
     category = "Fausse administration";
-    pushUnique(alerts, "Le message imite possiblement un service public ou administratif.");
+    pushUnique(
+      alerts,
+      "Le message imite possiblement un service public ou administratif."
+    );
   }
 
   if (
@@ -299,7 +257,10 @@ export function analyzeMessage(text: string): AnalysisResult {
   ) {
     score += 3;
     category = "Arnaque au proche";
-    pushUnique(alerts, "Le message ressemble à une demande urgente venant d’un proche.");
+    pushUnique(
+      alerts,
+      "Le message ressemble à une demande urgente venant d’un proche."
+    );
   }
 
   if (
@@ -318,7 +279,7 @@ export function analyzeMessage(text: string): AnalysisResult {
     pushUnique(alerts, "Le message ressemble à une arnaque au faux support technique.");
   }
 
-  if (COMMON_BRANDS.some((brand) => lower.includes(brand)) && urls.length > 0) {
+  if (COMMON_BRANDS.some((brand) => lower.includes(brand)) && domains.length > 0) {
     score += 1;
     pushUnique(
       alerts,
@@ -341,7 +302,8 @@ export function analyzeMessage(text: string): AnalysisResult {
   if (finalScore >= 8) {
     confidenceMessage = "Très probablement frauduleux.";
   } else if (finalScore >= 6) {
-    confidenceMessage = "Plusieurs signaux forts indiquent une tentative d’arnaque.";
+    confidenceMessage =
+      "Plusieurs signaux forts indiquent une tentative d’arnaque.";
   } else if (finalScore >= 3) {
     confidenceMessage = "Quelques éléments méritent de la prudence.";
   }
