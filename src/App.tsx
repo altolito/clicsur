@@ -75,7 +75,10 @@ export default function App() {
 
       if (!response.ok) {
         setAiResult({
-          error: data?.error || "Erreur pendant l’analyse IA.",
+          error:
+          data?.details ||
+          data?.error ||
+          "Erreur pendant l’analyse IA.",
         });
       } else {
         setAiResult(data);
