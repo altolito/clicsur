@@ -11,17 +11,27 @@ type HistoryItem = {
   createdAt: string;
 };
 
+type AiResult = {
+  summary?: string;
+  riskLevel?: "Faible" | "Moyen" | "Élevé";
+  explanation?: string[];
+  advice?: string;
+  error?: string;
+};
+
 const examples = [
   "Votre colis est bloqué. Paiement de 1,99€ requis sous 24h : http://suivi-livraison-client.xyz",
   "Bonjour, votre compte Netflix nécessite une reconnexion immédiate : http://netflix-verification.click",
   "Félicitations, vous avez gagné un iPhone. Cliquez ici pour recevoir votre cadeau.",
-  "Bonjour maman, j’ai changé de numéro. Peux-tu m’envoyer un virement rapidement ?",
+  "Bonjour maman, j'ai changé de numéro. Peux-tu m'envoyer un virement rapidement ?",
 ];
 
 export default function App() {
   const [value, setValue] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [aiResult, setAiResult] = useState<AiResult | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const resultRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -39,7 +49,7 @@ export default function App() {
     localStorage.setItem("clicsur-history", JSON.stringify(history));
   }, [history]);
 
-  function handleAnalyze(customText?: string) {
+  async function handleAnalyze(customText?: string) {
     const textToAnalyze = customText ?? value;
 
     if (!textToAnalyze.trim()) return;
@@ -47,6 +57,36 @@ export default function App() {
     const analysis = analyzeMessage(textToAnalyze);
     setResult(analysis);
     setValue(textToAnalyze);
+    setAiLoading(true);
+    setAiResult(null);
+
+    try {
+      const response = await fetch("/api/analyze-ai", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: textToAnalyze,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setAiResult({
+          error: data?.error || "Erreur pendant l’analyse IA.",
+        });
+      } else {
+        setAiResult(data);
+      }
+    } catch {
+      setAiResult({
+        error: "Impossible de contacter l’analyse IA.",
+      });
+    } finally {
+      setAiLoading(false);
+    }
 
     const item: HistoryItem = {
       id: crypto.randomUUID(),
@@ -71,15 +111,37 @@ export default function App() {
   function loadExample(example: string) {
     setValue(example);
     setResult(null);
+    setAiResult(null);
   }
 
   function resetAnalysis() {
     setValue("");
     setResult(null);
+    setAiResult(null);
   }
 
   function copyReport() {
     if (!result) return;
+
+    const aiBlock =
+      aiResult && !aiResult.error
+        ? `
+
+Analyse IA :
+${aiResult.summary || ""}
+
+Niveau IA :
+${aiResult.riskLevel || ""}
+
+Explications IA :
+${Array.isArray(aiResult.explanation)
+  ? aiResult.explanation.map((item) => `- ${item}`).join("\n")
+  : ""}
+
+Conseil IA :
+${aiResult.advice || ""}
+`
+        : "";
 
     const report = `
 Analyse ClicSûr
@@ -96,6 +158,7 @@ ${result.alerts.map((alert) => `- ${alert}`).join("\n")}
 
 Recommandation :
 ${result.recommendation}
+${aiBlock}
 `.trim();
 
     navigator.clipboard.writeText(report);
@@ -120,7 +183,7 @@ ${result.recommendation}
 
           <div className="hidden md:flex items-center gap-2 text-sm text-slate-500">
             <div className="h-2 w-2 rounded-full bg-emerald-500" />
-            Analyse locale active
+            Analyse locale + IA
           </div>
         </header>
 
@@ -166,9 +229,10 @@ ${result.recommendation}
           <div className="flex gap-3 mt-4">
             <button
               onClick={() => handleAnalyze()}
-              className="flex-1 bg-blue-600 text-white font-semibold rounded-2xl py-3 hover:bg-blue-700 transition"
+              disabled={aiLoading}
+              className="flex-1 bg-blue-600 text-white font-semibold rounded-2xl py-3 hover:bg-blue-700 transition disabled:opacity-60"
             >
-              Analyser le risque
+              {aiLoading ? "Analyse en cours..." : "Analyser le risque"}
             </button>
 
             <button
@@ -251,6 +315,54 @@ ${result.recommendation}
 
               <p className="text-slate-600 mt-1">{result.recommendation}</p>
             </div>
+
+            {aiLoading && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                <p className="font-semibold text-slate-900">
+                  Analyse IA en cours...
+                </p>
+              </div>
+            )}
+
+            {aiResult && !aiResult.error && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
+                <div>
+                  <p className="font-semibold text-slate-900">Analyse IA</p>
+
+                  <p className="text-slate-600 mt-1">{aiResult.summary}</p>
+                </div>
+
+                <div>
+                  <p className="font-medium text-slate-900">Niveau détecté</p>
+
+                  <p className="text-slate-600">{aiResult.riskLevel}</p>
+                </div>
+
+                {Array.isArray(aiResult.explanation) && (
+                  <div>
+                    <p className="font-medium text-slate-900">Explications</p>
+
+                    <ul className="mt-2 space-y-2 text-slate-600">
+                      {aiResult.explanation.map((item, index) => (
+                        <li key={index}>• {item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div>
+                  <p className="font-medium text-slate-900">Conseil IA</p>
+
+                  <p className="text-slate-600">{aiResult.advice}</p>
+                </div>
+              </div>
+            )}
+
+            {aiResult?.error && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+                <p className="text-red-700">{aiResult.error}</p>
+              </div>
+            )}
 
             <div className="flex justify-end">
               <button

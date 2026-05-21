@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {
     return res.status(405).json({
@@ -14,21 +16,27 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const response = await fetch(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4.1-mini",
-          temperature: 0.2,
-          messages: [
-            {
-              role: "system",
-              content: `
+    const apiKey = process.env.OPENAI_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({
+        error: "Clé OpenAI manquante côté serveur",
+      });
+    }
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        temperature: 0.2,
+        messages: [
+          {
+            role: "system",
+            content: `
 Tu es un assistant spécialisé dans la détection d’arnaques numériques.
 
 Analyse le message fourni par l’utilisateur.
@@ -47,15 +55,14 @@ Réponds uniquement en JSON valide avec ce format :
 
 Ne rajoute aucun texte hors JSON.
 `,
-            },
-            {
-              role: "user",
-              content: text,
-            },
-          ],
-        }),
-      }
-    );
+          },
+          {
+            role: "user",
+            content: text,
+          },
+        ],
+      }),
+    });
 
     if (!response.ok) {
       const error = await response.text();
@@ -67,9 +74,7 @@ Ne rajoute aucun texte hors JSON.
     }
 
     const data = await response.json();
-
-    const content =
-      data?.choices?.[0]?.message?.content ?? "{}";
+    const content = data?.choices?.[0]?.message?.content ?? "{}";
 
     let parsed;
 
