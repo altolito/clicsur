@@ -17,7 +17,10 @@ type AiResult = {
   explanation?: string[];
   advice?: string;
   error?: string;
+  skipped?: boolean;
 };
+
+const AI_TRIGGER_SCORE = 4;
 
 const examples = [
   "Votre colis est bloqué. Paiement de 1,99€ requis sous 24h : http://suivi-livraison-client.xyz",
@@ -55,40 +58,52 @@ export default function App() {
     if (!textToAnalyze.trim()) return;
 
     const analysis = analyzeMessage(textToAnalyze);
+    const shouldUseAI = analysis.score >= AI_TRIGGER_SCORE;
+
     setResult(analysis);
     setValue(textToAnalyze);
-    setAiLoading(true);
     setAiResult(null);
 
-    try {
-      const response = await fetch("/api/analyze-ai", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: textToAnalyze,
-        }),
-      });
+    if (shouldUseAI) {
+      setAiLoading(true);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setAiResult({
-          error:
-          data?.details ||
-          data?.error ||
-          "Erreur pendant l’analyse IA.",
+      try {
+        const response = await fetch("/api/analyze-ai", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: textToAnalyze,
+          }),
         });
-      } else {
-        setAiResult(data);
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setAiResult({
+            error:
+              data?.details ||
+              data?.error ||
+              "Erreur pendant l’analyse IA.",
+          });
+        } else {
+          setAiResult(data);
+        }
+      } catch {
+        setAiResult({
+          error: "Impossible de contacter l’analyse IA.",
+        });
+      } finally {
+        setAiLoading(false);
       }
-    } catch {
-      setAiResult({
-        error: "Impossible de contacter l’analyse IA.",
-      });
-    } finally {
+    } else {
       setAiLoading(false);
+      setAiResult({
+        skipped: true,
+        summary:
+          "L’analyse locale ne détecte pas assez de signaux suspects pour déclencher l’IA.",
+      });
     }
 
     const item: HistoryItem = {
@@ -127,7 +142,7 @@ export default function App() {
     if (!result) return;
 
     const aiBlock =
-      aiResult && !aiResult.error
+      aiResult && !aiResult.error && !aiResult.skipped
         ? `
 
 Analyse IA :
@@ -137,9 +152,11 @@ Niveau IA :
 ${aiResult.riskLevel || ""}
 
 Explications IA :
-${Array.isArray(aiResult.explanation)
-  ? aiResult.explanation.map((item) => `- ${item}`).join("\n")
-  : ""}
+${
+  Array.isArray(aiResult.explanation)
+    ? aiResult.explanation.map((item) => `- ${item}`).join("\n")
+    : ""
+}
 
 Conseil IA :
 ${aiResult.advice || ""}
@@ -186,7 +203,7 @@ ${aiBlock}
 
           <div className="hidden md:flex items-center gap-2 text-sm text-slate-500">
             <div className="h-2 w-2 rounded-full bg-emerald-500" />
-            Analyse locale + IA
+            Analyse locale + IA ciblée
           </div>
         </header>
 
@@ -327,7 +344,17 @@ ${aiBlock}
               </div>
             )}
 
-            {aiResult && !aiResult.error && (
+            {aiResult?.skipped && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                <p className="font-semibold text-slate-900">
+                  Analyse locale suffisante
+                </p>
+
+                <p className="text-slate-600 mt-1">{aiResult.summary}</p>
+              </div>
+            )}
+
+            {aiResult && !aiResult.error && !aiResult.skipped && (
               <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
                 <div>
                   <p className="font-semibold text-slate-900">Analyse IA</p>
