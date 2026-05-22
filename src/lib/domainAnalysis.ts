@@ -28,6 +28,20 @@ const URL_SHORTENERS = [
   "shorturl.at",
 ];
 
+const TRUSTED_BRANDS = [
+  "paypal",
+  "netflix",
+  "amazon",
+  "ameli",
+  "caf",
+  "impots",
+  "laposte",
+  "chronopost",
+  "microsoft",
+  "google",
+  "apple",
+];
+
 export function extractDomain(rawUrl: string): string | null {
   try {
     const cleanedUrl = rawUrl.trim().replace(/[),.;!?]+$/g, "");
@@ -51,18 +65,23 @@ export function analyzeDomain(rawUrl: string): DomainAnalysis | null {
   }
 
   let scoreImpact = 0;
+
   const alerts: string[] = [];
   const technicalDetails: string[] = [`Domaine détecté : ${domain}`];
 
   if (rawUrl.startsWith("http://")) {
     scoreImpact += 2;
+
     alerts.push("Le lien utilise HTTP au lieu de HTTPS.");
+
     technicalDetails.push("Protocole non sécurisé : HTTP");
   }
 
   if (domain.length > 30) {
     scoreImpact += 2;
+
     alerts.push("Le nom de domaine est anormalement long.");
+
     technicalDetails.push("Domaine long : oui");
   } else {
     technicalDetails.push("Domaine long : non");
@@ -70,7 +89,9 @@ export function analyzeDomain(rawUrl: string): DomainAnalysis | null {
 
   if (/\d/.test(domain)) {
     scoreImpact += 1;
+
     alerts.push("Le domaine contient des chiffres.");
+
     technicalDetails.push("Chiffres dans le domaine : oui");
   }
 
@@ -78,23 +99,47 @@ export function analyzeDomain(rawUrl: string): DomainAnalysis | null {
 
   if (dashCount >= 2) {
     scoreImpact += 1;
+
     alerts.push("Le domaine contient plusieurs tirets.");
+
     technicalDetails.push(`Nombre de tirets : ${dashCount}`);
   }
 
   if (SUSPICIOUS_EXTENSIONS.some((extension) => domain.endsWith(extension))) {
     scoreImpact += 2;
+
     alerts.push(
       "Le domaine utilise une extension souvent présente dans des campagnes douteuses."
     );
+
     technicalDetails.push("Extension à surveiller : oui");
   }
 
   if (URL_SHORTENERS.some((shortener) => domain.includes(shortener))) {
     scoreImpact += 3;
+
     alerts.push("Le lien utilise probablement un raccourcisseur d’URL.");
+
     technicalDetails.push("Raccourcisseur d’URL : oui");
   }
+
+  TRUSTED_BRANDS.forEach((brand) => {
+    if (
+      domain.includes(brand) &&
+      !domain.endsWith(`${brand}.com`) &&
+      !domain.endsWith(`${brand}.fr`)
+    ) {
+      scoreImpact += 3;
+
+      alerts.push(
+        `Le domaine semble imiter la marque "${brand}".`
+      );
+
+      technicalDetails.push(
+        `Possible usurpation de marque détectée : ${brand}`
+      );
+    }
+  });
 
   return {
     domain,
