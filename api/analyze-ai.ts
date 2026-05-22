@@ -1,9 +1,78 @@
 /// <reference types="node" />
 
+type RateLimitEntry = {
+  count: number;
+  resetAt: number;
+};
+
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 5;
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+function getClientIp(req: any): string {
+  const forwardedFor = req.headers["x-forwarded-for"];
+
+  if (typeof forwardedFor === "string") {
+    return forwardedFor.split(",")[0].trim();
+  }
+
+  return req.socket?.remoteAddress || "unknown";
+}
+
+function checkRateLimit(ip: string) {
+  const now = Date.now();
+  const current = rateLimitStore.get(ip);
+
+  if (!current || current.resetAt < now) {
+    rateLimitStore.set(ip, {
+      count: 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS,
+    });
+
+    return {
+      allowed: true,
+      remaining: RATE_LIMIT_MAX_REQUESTS - 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS,
+    };
+  }
+
+  if (current.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt: current.resetAt,
+    };
+  }
+
+  current.count += 1;
+  rateLimitStore.set(ip, current);
+
+  return {
+    allowed: true,
+    remaining: RATE_LIMIT_MAX_REQUESTS - current.count,
+    resetAt: current.resetAt,
+  };
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {
     return res.status(405).json({
       error: "Méthode non autorisée",
+    });
+  }
+
+  const ip = getClientIp(req);
+  const rateLimit = checkRateLimit(ip);
+
+  res.setHeader("X-RateLimit-Limit", RATE_LIMIT_MAX_REQUESTS.toString());
+  res.setHeader("X-RateLimit-Remaining", rateLimit.remaining.toString());
+  res.setHeader("X-RateLimit-Reset", rateLimit.resetAt.toString());
+
+  if (!rateLimit.allowed) {
+    return res.status(429).json({
+      error:
+        "Trop d’analyses IA en peu de temps. Réessayez dans quelques instants.",
     });
   }
 
@@ -13,6 +82,12 @@ export default async function handler(req: any, res: any) {
     if (!text || typeof text !== "string") {
       return res.status(400).json({
         error: "Texte invalide",
+      });
+    }
+
+    if (text.length > 3000) {
+      return res.status(400).json({
+        error: "Le message est trop long pour l’analyse IA.",
       });
     }
 

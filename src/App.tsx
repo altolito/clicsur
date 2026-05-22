@@ -35,11 +35,14 @@ export default function App() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
   const resultRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     try {
       const savedHistory = localStorage.getItem("clicsur-history");
+
       if (savedHistory) {
         setHistory(JSON.parse(savedHistory));
       }
@@ -52,10 +55,26 @@ export default function App() {
     localStorage.setItem("clicsur-history", JSON.stringify(history));
   }, [history]);
 
+  useEffect(() => {
+    if (cooldown <= 0) return;
+
+    const timer = setTimeout(() => {
+      setCooldown((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
   async function handleAnalyze(customText?: string) {
+    if (cooldown > 0) {
+      return;
+    }
+
     const textToAnalyze = customText ?? value;
 
     if (!textToAnalyze.trim()) return;
+
+    setCooldown(5);
 
     const analysis = analyzeMessage(textToAnalyze);
     const shouldUseAI = analysis.score >= AI_TRIGGER_SCORE;
@@ -99,6 +118,7 @@ export default function App() {
       }
     } else {
       setAiLoading(false);
+
       setAiResult({
         skipped: true,
         summary:
@@ -195,6 +215,7 @@ ${aiBlock}
 
             <div>
               <p className="font-semibold text-lg">ClicSûr</p>
+
               <p className="text-sm text-slate-500">
                 Protection numérique famille
               </p>
@@ -203,6 +224,7 @@ ${aiBlock}
 
           <div className="hidden md:flex items-center gap-2 text-sm text-slate-500">
             <div className="h-2 w-2 rounded-full bg-emerald-500" />
+
             Analyse locale + IA ciblée
           </div>
         </header>
@@ -217,13 +239,15 @@ ${aiBlock}
           </h1>
 
           <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed">
-            ClicSûr aide à repérer les SMS frauduleux, faux emails, arnaques au
-            colis, fausses banques et liens suspects.
+            ClicSûr aide à repérer les SMS frauduleux, faux emails,
+            arnaques au colis, fausses banques et liens suspects.
           </p>
         </div>
 
         <div className="grid gap-3">
-          <p className="text-sm text-slate-500">Exemples fréquents :</p>
+          <p className="text-sm text-slate-500">
+            Exemples fréquents :
+          </p>
 
           <div className="grid md:grid-cols-2 gap-3">
             {examples.map((example, index) => (
@@ -249,10 +273,14 @@ ${aiBlock}
           <div className="flex gap-3 mt-4">
             <button
               onClick={() => handleAnalyze()}
-              disabled={aiLoading}
+              disabled={aiLoading || cooldown > 0}
               className="flex-1 bg-blue-600 text-white font-semibold rounded-2xl py-3 hover:bg-blue-700 transition disabled:opacity-60"
             >
-              {aiLoading ? "Analyse en cours..." : "Analyser le risque"}
+              {aiLoading
+                ? "Analyse en cours..."
+                : cooldown > 0
+                ? `Patientez ${cooldown}s`
+                : "Analyser le risque"}
             </button>
 
             <button
@@ -277,7 +305,9 @@ ${aiBlock}
           >
             <div className="flex items-start justify-between gap-6">
               <div>
-                <p className="text-sm text-slate-500">Niveau de risque</p>
+                <p className="text-sm text-slate-500">
+                  Niveau de risque
+                </p>
 
                 <p className="mt-2 inline-flex rounded-full bg-white/70 px-3 py-1 text-sm font-medium text-slate-700 border border-slate-200">
                   {result.category}
@@ -305,7 +335,9 @@ ${aiBlock}
 
                 <p className="text-5xl font-bold text-slate-900">
                   {result.score}
-                  <span className="text-slate-400 text-2xl">/10</span>
+                  <span className="text-slate-400 text-2xl">
+                    /10
+                  </span>
                 </p>
               </div>
             </div>
@@ -331,9 +363,13 @@ ${aiBlock}
             )}
 
             <div className="bg-white border border-slate-200 rounded-2xl p-4">
-              <p className="font-semibold text-slate-900">Recommandation</p>
+              <p className="font-semibold text-slate-900">
+                Recommandation
+              </p>
 
-              <p className="text-slate-600 mt-1">{result.recommendation}</p>
+              <p className="text-slate-600 mt-1">
+                {result.recommendation}
+              </p>
             </div>
 
             {aiLoading && (
@@ -350,47 +386,69 @@ ${aiBlock}
                   Analyse locale suffisante
                 </p>
 
-                <p className="text-slate-600 mt-1">{aiResult.summary}</p>
+                <p className="text-slate-600 mt-1">
+                  {aiResult.summary}
+                </p>
               </div>
             )}
 
-            {aiResult && !aiResult.error && !aiResult.skipped && (
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
-                <div>
-                  <p className="font-semibold text-slate-900">Analyse IA</p>
-
-                  <p className="text-slate-600 mt-1">{aiResult.summary}</p>
-                </div>
-
-                <div>
-                  <p className="font-medium text-slate-900">Niveau détecté</p>
-
-                  <p className="text-slate-600">{aiResult.riskLevel}</p>
-                </div>
-
-                {Array.isArray(aiResult.explanation) && (
+            {aiResult &&
+              !aiResult.error &&
+              !aiResult.skipped && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
                   <div>
-                    <p className="font-medium text-slate-900">Explications</p>
+                    <p className="font-semibold text-slate-900">
+                      Analyse IA
+                    </p>
 
-                    <ul className="mt-2 space-y-2 text-slate-600">
-                      {aiResult.explanation.map((item, index) => (
-                        <li key={index}>• {item}</li>
-                      ))}
-                    </ul>
+                    <p className="text-slate-600 mt-1">
+                      {aiResult.summary}
+                    </p>
                   </div>
-                )}
 
-                <div>
-                  <p className="font-medium text-slate-900">Conseil IA</p>
+                  <div>
+                    <p className="font-medium text-slate-900">
+                      Niveau détecté
+                    </p>
 
-                  <p className="text-slate-600">{aiResult.advice}</p>
+                    <p className="text-slate-600">
+                      {aiResult.riskLevel}
+                    </p>
+                  </div>
+
+                  {Array.isArray(aiResult.explanation) && (
+                    <div>
+                      <p className="font-medium text-slate-900">
+                        Explications
+                      </p>
+
+                      <ul className="mt-2 space-y-2 text-slate-600">
+                        {aiResult.explanation.map(
+                          (item, index) => (
+                            <li key={index}>• {item}</li>
+                          )
+                        )}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="font-medium text-slate-900">
+                      Conseil IA
+                    </p>
+
+                    <p className="text-slate-600">
+                      {aiResult.advice}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {aiResult?.error && (
               <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
-                <p className="text-red-700">{aiResult.error}</p>
+                <p className="text-red-700">
+                  {aiResult.error}
+                </p>
               </div>
             )}
 
@@ -409,7 +467,10 @@ ${aiBlock}
           <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="font-semibold text-lg">Analyses récentes</h2>
+                <h2 className="font-semibold text-lg">
+                  Analyses récentes
+                </h2>
+
                 <p className="text-sm text-slate-500">
                   Historique conservé uniquement sur cet appareil.
                 </p>
@@ -430,7 +491,9 @@ ${aiBlock}
                   className="flex items-start justify-between gap-4 border border-slate-100 rounded-2xl p-4"
                 >
                   <div>
-                    <p className="text-sm text-slate-500">{item.createdAt}</p>
+                    <p className="text-sm text-slate-500">
+                      {item.createdAt}
+                    </p>
 
                     <p className="mt-1 text-sm font-medium text-slate-600">
                       {item.category}
@@ -472,10 +535,10 @@ ${aiBlock}
         )}
 
         <div className="text-center text-sm text-slate-500 max-w-2xl mx-auto leading-relaxed">
-          ClicSûr fournit une aide à la détection mais ne garantit pas qu’un
-          contenu soit totalement sûr ou frauduleux. Ne communiquez jamais vos
-          mots de passe, codes bancaires ou informations sensibles depuis un lien
-          reçu par message.
+          ClicSûr fournit une aide à la détection mais ne garantit pas
+          qu’un contenu soit totalement sûr ou frauduleux. Ne
+          communiquez jamais vos mots de passe, codes bancaires ou
+          informations sensibles depuis un lien reçu par message.
         </div>
       </section>
     </main>
