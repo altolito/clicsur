@@ -1,4 +1,5 @@
 import { analyzeDomain, extractDomain } from "./domainAnalysis";
+import { checkSafeBrowsing } from "./checkSafeBrowsing";
 
 export type AnalysisResult = {
   risk: "Faible" | "Moyen" | "Élevé";
@@ -39,7 +40,9 @@ function pushUnique(list: string[], value: string) {
   }
 }
 
-export function analyzeMessage(text: string): AnalysisResult {
+export async function analyzeMessage(
+  text: string
+): Promise<AnalysisResult> {
   const lower = text.toLowerCase().trim();
 
   let score = 0;
@@ -66,20 +69,25 @@ export function analyzeMessage(text: string): AnalysisResult {
     /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9-]+\.[a-z]{2,}(\/[^\s]*)?)/gi;
 
   const urls = text.match(urlRegex) || [];
+
   const domains = urls
     .map((url) => extractDomain(url))
     .filter((domain): domain is string => Boolean(domain));
 
   if (urls.length > 0) {
     score += 2;
+
     pushUnique(alerts, "Un lien a été détecté dans le message.");
-    technicalDetails.push(`Nombre de liens détectés : ${urls.length}`);
+
+    technicalDetails.push(
+      `Nombre de liens détectés : ${urls.length}`
+    );
   }
 
-  urls.forEach((url) => {
+  for (const url of urls) {
     const domainAnalysis = analyzeDomain(url);
 
-    if (!domainAnalysis) return;
+    if (!domainAnalysis) continue;
 
     score += domainAnalysis.scoreImpact;
 
@@ -98,10 +106,31 @@ export function analyzeMessage(text: string): AnalysisResult {
     ) {
       category = "Lien masqué ou raccourci";
     }
-  });
+
+    // Google Safe Browsing
+    const safeBrowsing = await checkSafeBrowsing(url);
+
+    if (safeBrowsing.dangerous) {
+      score += 4;
+
+      category = "URL dangereuse détectée";
+
+      pushUnique(
+        alerts,
+        "Google Safe Browsing a signalé cette URL comme dangereuse."
+      );
+
+      safeBrowsing.threats.forEach((threat) => {
+        technicalDetails.push(
+          `Menace Google détectée : ${threat}`
+        );
+      });
+    }
+  }
 
   if (urls.some((url) => url.length > 80)) {
     score += 2;
+
     pushUnique(alerts, "L’URL semble anormalement longue.");
   }
 
@@ -122,6 +151,7 @@ export function analyzeMessage(text: string): AnalysisResult {
     ])
   ) {
     score += 2;
+
     pushUnique(alerts, "Le message crée un sentiment d’urgence.");
   }
 
@@ -142,7 +172,9 @@ export function analyzeMessage(text: string): AnalysisResult {
     ])
   ) {
     score += 3;
+
     category = "Demande de paiement suspecte";
+
     pushUnique(
       alerts,
       "Une demande de paiement ou de régularisation a été détectée."
@@ -164,8 +196,13 @@ export function analyzeMessage(text: string): AnalysisResult {
     ])
   ) {
     score += 3;
+
     category = "Compte ou identifiants menacés";
-    pushUnique(alerts, "Le message évoque des informations sensibles.");
+
+    pushUnique(
+      alerts,
+      "Le message évoque des informations sensibles."
+    );
   }
 
   if (
@@ -181,7 +218,9 @@ export function analyzeMessage(text: string): AnalysisResult {
     ])
   ) {
     score += 2;
+
     category = "Arnaque au colis";
+
     pushUnique(
       alerts,
       "Le message ressemble à une arnaque liée à un colis ou une livraison."
@@ -204,7 +243,9 @@ export function analyzeMessage(text: string): AnalysisResult {
     ])
   ) {
     score += 2;
+
     category = "Fausse administration";
+
     pushUnique(
       alerts,
       "Le message imite possiblement un service public ou administratif."
@@ -223,8 +264,13 @@ export function analyzeMessage(text: string): AnalysisResult {
     ])
   ) {
     score += 3;
+
     category = "Fausse alerte bancaire";
-    pushUnique(alerts, "Le message ressemble à une alerte bancaire suspecte.");
+
+    pushUnique(
+      alerts,
+      "Le message ressemble à une alerte bancaire suspecte."
+    );
   }
 
   if (
@@ -239,8 +285,13 @@ export function analyzeMessage(text: string): AnalysisResult {
     ])
   ) {
     score += 2;
+
     category = "Faux gain ou cadeau";
-    pushUnique(alerts, "Le message utilise une promesse de gain ou de récompense.");
+
+    pushUnique(
+      alerts,
+      "Le message utilise une promesse de gain ou de récompense."
+    );
   }
 
   if (
@@ -256,7 +307,9 @@ export function analyzeMessage(text: string): AnalysisResult {
     ])
   ) {
     score += 3;
+
     category = "Arnaque au proche";
+
     pushUnique(
       alerts,
       "Le message ressemble à une demande urgente venant d’un proche."
@@ -275,12 +328,21 @@ export function analyzeMessage(text: string): AnalysisResult {
     ])
   ) {
     score += 3;
+
     category = "Faux support technique";
-    pushUnique(alerts, "Le message ressemble à une arnaque au faux support technique.");
+
+    pushUnique(
+      alerts,
+      "Le message ressemble à une arnaque au faux support technique."
+    );
   }
 
-  if (COMMON_BRANDS.some((brand) => lower.includes(brand)) && domains.length > 0) {
+  if (
+    COMMON_BRANDS.some((brand) => lower.includes(brand)) &&
+    domains.length > 0
+  ) {
     score += 1;
+
     pushUnique(
       alerts,
       "Le message mentionne une marque ou un service connu avec un lien à vérifier."
@@ -288,11 +350,15 @@ export function analyzeMessage(text: string): AnalysisResult {
   }
 
   if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(text)) {
-    technicalDetails.push("Adresse email détectée dans le contenu.");
+    technicalDetails.push(
+      "Adresse email détectée dans le contenu."
+    );
   }
 
   if (/\b(0|\+33)[1-9](\s?\d{2}){4}\b/.test(text)) {
-    technicalDetails.push("Numéro de téléphone détecté dans le contenu.");
+    technicalDetails.push(
+      "Numéro de téléphone détecté dans le contenu."
+    );
   }
 
   const finalScore = Math.min(score, 10);
@@ -305,7 +371,8 @@ export function analyzeMessage(text: string): AnalysisResult {
     confidenceMessage =
       "Plusieurs signaux forts indiquent une tentative d’arnaque.";
   } else if (finalScore >= 3) {
-    confidenceMessage = "Quelques éléments méritent de la prudence.";
+    confidenceMessage =
+      "Quelques éléments méritent de la prudence.";
   }
 
   if (finalScore <= 2) {
@@ -313,8 +380,11 @@ export function analyzeMessage(text: string): AnalysisResult {
       risk: "Faible",
       color: "emerald",
       score: finalScore,
-      alerts: alerts.length ? alerts : ["Aucun signal critique détecté."],
-      recommendation: "Le contenu semble relativement sûr, mais restez vigilant.",
+      alerts: alerts.length
+        ? alerts
+        : ["Aucun signal critique détecté."],
+      recommendation:
+        "Le contenu semble relativement sûr, mais restez vigilant.",
       technicalDetails,
       category,
       confidenceMessage,

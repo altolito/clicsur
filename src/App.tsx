@@ -76,7 +76,7 @@ export default function App() {
 
     setCooldown(5);
 
-    const analysis = analyzeMessage(textToAnalyze);
+    const analysis = await analyzeMessage(textToAnalyze);
     const shouldUseAI = analysis.score >= AI_TRIGGER_SCORE;
 
     setResult(analysis);
