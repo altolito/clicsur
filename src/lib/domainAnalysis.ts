@@ -42,6 +42,17 @@ const TRUSTED_BRANDS = [
   "apple",
 ];
 
+const TYPO_PATTERNS = [
+  ["paypa1", "paypal"],
+  ["paypai", "paypal"],
+  ["arnazon", "amazon"],
+  ["micr0soft", "microsoft"],
+  ["netf1ix", "netflix"],
+  ["g00gle", "google"],
+  ["app1e", "apple"],
+  ["amel1", "ameli"],
+];
+
 export function extractDomain(rawUrl: string): string | null {
   try {
     const cleanedUrl = rawUrl.trim().replace(/[),.;!?]+$/g, "");
@@ -137,6 +148,20 @@ export function analyzeDomain(rawUrl: string): DomainAnalysis | null {
 
       technicalDetails.push(
         `Possible usurpation de marque détectée : ${brand}`
+      );
+    }
+  });
+
+  TYPO_PATTERNS.forEach(([fake, brand]) => {
+    if (domain.includes(fake)) {
+      scoreImpact += 4;
+
+      alerts.push(
+        `Le domaine semble utiliser une imitation de "${brand}".`
+      );
+
+      technicalDetails.push(
+        `Possible typo-squatting détecté : ${fake} → ${brand}`
       );
     }
   });
