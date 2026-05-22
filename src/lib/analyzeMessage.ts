@@ -16,6 +16,7 @@ const COMMON_BRANDS = [
   "ameli",
   "caf",
   "impots",
+  "impôts",
   "chronopost",
   "mondial relay",
   "la poste",
@@ -28,6 +29,13 @@ const COMMON_BRANDS = [
   "banque",
   "cpam",
   "cpf",
+  "makita",
+  "bosch",
+  "dewalt",
+  "leroy merlin",
+  "castorama",
+  "brico dépôt",
+  "brico depot",
 ];
 
 function includesAny(text: string, keywords: string[]) {
@@ -40,10 +48,18 @@ function pushUnique(list: string[], value: string) {
   }
 }
 
+function normalizeText(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[’]/g, "'")
+    .trim();
+}
+
 export async function analyzeMessage(
   text: string
 ): Promise<AnalysisResult> {
-  const lower = text.toLowerCase().trim();
+  const lower = normalizeText(text);
 
   let score = 0;
   let category = "Analyse générale";
@@ -76,12 +92,8 @@ export async function analyzeMessage(
 
   if (urls.length > 0) {
     score += 2;
-
     pushUnique(alerts, "Un lien a été détecté dans le message.");
-
-    technicalDetails.push(
-      `Nombre de liens détectés : ${urls.length}`
-    );
+    technicalDetails.push(`Nombre de liens détectés : ${urls.length}`);
   }
 
   for (const url of urls) {
@@ -107,12 +119,10 @@ export async function analyzeMessage(
       category = "Lien masqué ou raccourci";
     }
 
-    // Google Safe Browsing
     const safeBrowsing = await checkSafeBrowsing(url);
 
     if (safeBrowsing.dangerous) {
       score += 4;
-
       category = "URL dangereuse détectée";
 
       pushUnique(
@@ -121,16 +131,13 @@ export async function analyzeMessage(
       );
 
       safeBrowsing.threats.forEach((threat) => {
-        technicalDetails.push(
-          `Menace Google détectée : ${threat}`
-        );
+        pushUnique(technicalDetails, `Menace Google détectée : ${threat}`);
       });
     }
   }
 
   if (urls.some((url) => url.length > 80)) {
     score += 2;
-
     pushUnique(alerts, "L’URL semble anormalement longue.");
   }
 
@@ -151,7 +158,6 @@ export async function analyzeMessage(
     ])
   ) {
     score += 2;
-
     pushUnique(alerts, "Le message crée un sentiment d’urgence.");
   }
 
@@ -172,7 +178,6 @@ export async function analyzeMessage(
     ])
   ) {
     score += 3;
-
     category = "Demande de paiement suspecte";
 
     pushUnique(
@@ -196,13 +201,9 @@ export async function analyzeMessage(
     ])
   ) {
     score += 3;
-
     category = "Compte ou identifiants menacés";
 
-    pushUnique(
-      alerts,
-      "Le message évoque des informations sensibles."
-    );
+    pushUnique(alerts, "Le message évoque des informations sensibles.");
   }
 
   if (
@@ -218,7 +219,6 @@ export async function analyzeMessage(
     ])
   ) {
     score += 2;
-
     category = "Arnaque au colis";
 
     pushUnique(
@@ -243,7 +243,6 @@ export async function analyzeMessage(
     ])
   ) {
     score += 2;
-
     category = "Fausse administration";
 
     pushUnique(
@@ -264,33 +263,90 @@ export async function analyzeMessage(
     ])
   ) {
     score += 3;
-
     category = "Fausse alerte bancaire";
 
-    pushUnique(
-      alerts,
-      "Le message ressemble à une alerte bancaire suspecte."
-    );
+    pushUnique(alerts, "Le message ressemble à une alerte bancaire suspecte.");
   }
 
-  if (
-    includesAny(lower, [
-      "félicitations",
-      "vous avez gagné",
-      "cadeau",
-      "récompense",
-      "tirage au sort",
-      "lot gagné",
-      "gagnant",
-    ])
-  ) {
-    score += 2;
+  const hasFakeContestSignal = includesAny(lower, [
+    "félicitations",
+    "felicitations",
+    "vous avez gagné",
+    "vous pouvez gagner",
+    "gagner un prix",
+    "prix exclusif",
+    "cadeau",
+    "récompense",
+    "recompense",
+    "tirage au sort",
+    "lot gagné",
+    "gagnant",
+    "coffret",
+  ]);
 
-    category = "Faux gain ou cadeau";
+  if (hasFakeContestSignal) {
+    score += 3;
+    category = "Faux concours ou cadeau";
 
     pushUnique(
       alerts,
       "Le message utilise une promesse de gain ou de récompense."
+    );
+  }
+
+  if (
+    includesAny(lower, ["félicitations", "felicitations"]) &&
+    includesAny(lower, ["gagner", "prix", "cadeau", "coffret"])
+  ) {
+    score += 3;
+    category = "Faux concours ou cadeau";
+
+    pushUnique(
+      alerts,
+      "Le message utilise une mécanique classique de faux concours."
+    );
+  }
+
+  if (
+    includesAny(lower, ["commentaire", "commentaires", "avis", "sondage"]) &&
+    includesAny(lower, ["prix", "cadeau", "récompense", "recompense", "coffret"])
+  ) {
+    score += 2;
+    category = "Faux concours ou cadeau";
+
+    pushUnique(
+      alerts,
+      "Le message tente d’échanger une action contre une récompense."
+    );
+  }
+
+  if (
+    COMMON_BRANDS.some((brand) => lower.includes(brand)) &&
+    hasFakeContestSignal
+  ) {
+    score += 2;
+    category = "Usurpation possible de marque";
+
+    pushUnique(
+      alerts,
+      "Le message utilise possiblement une marque connue pour inspirer confiance."
+    );
+
+    pushUnique(
+      technicalDetails,
+      "Mention d’une marque connue dans un contexte de gain ou de cadeau."
+    );
+  }
+
+  if (
+    COMMON_BRANDS.some((brand) => lower.includes(brand)) &&
+    domains.length > 0
+  ) {
+    score += 1;
+
+    pushUnique(
+      alerts,
+      "Le message mentionne une marque ou un service connu avec un lien à vérifier."
     );
   }
 
@@ -307,7 +363,6 @@ export async function analyzeMessage(
     ])
   ) {
     score += 3;
-
     category = "Arnaque au proche";
 
     pushUnique(
@@ -328,7 +383,6 @@ export async function analyzeMessage(
     ])
   ) {
     score += 3;
-
     category = "Faux support technique";
 
     pushUnique(
@@ -337,28 +391,12 @@ export async function analyzeMessage(
     );
   }
 
-  if (
-    COMMON_BRANDS.some((brand) => lower.includes(brand)) &&
-    domains.length > 0
-  ) {
-    score += 1;
-
-    pushUnique(
-      alerts,
-      "Le message mentionne une marque ou un service connu avec un lien à vérifier."
-    );
-  }
-
   if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(text)) {
-    technicalDetails.push(
-      "Adresse email détectée dans le contenu."
-    );
+    pushUnique(technicalDetails, "Adresse email détectée dans le contenu.");
   }
 
   if (/\b(0|\+33)[1-9](\s?\d{2}){4}\b/.test(text)) {
-    technicalDetails.push(
-      "Numéro de téléphone détecté dans le contenu."
-    );
+    pushUnique(technicalDetails, "Numéro de téléphone détecté dans le contenu.");
   }
 
   const finalScore = Math.min(score, 10);
@@ -371,8 +409,7 @@ export async function analyzeMessage(
     confidenceMessage =
       "Plusieurs signaux forts indiquent une tentative d’arnaque.";
   } else if (finalScore >= 3) {
-    confidenceMessage =
-      "Quelques éléments méritent de la prudence.";
+    confidenceMessage = "Quelques éléments méritent de la prudence.";
   }
 
   if (finalScore <= 2) {
@@ -380,9 +417,7 @@ export async function analyzeMessage(
       risk: "Faible",
       color: "emerald",
       score: finalScore,
-      alerts: alerts.length
-        ? alerts
-        : ["Aucun signal critique détecté."],
+      alerts: alerts.length ? alerts : ["Aucun signal critique détecté."],
       recommendation:
         "Le contenu semble relativement sûr, mais restez vigilant.",
       technicalDetails,
