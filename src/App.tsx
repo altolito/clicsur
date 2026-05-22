@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import Tesseract from "tesseract.js";
 import { analyzeMessage, type AnalysisResult } from "./lib/analyzeMessage";
 
 type HistoryItem = {
@@ -36,8 +37,11 @@ export default function App() {
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
 
   const resultRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     try {
@@ -65,8 +69,48 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [cooldown]);
 
+  async function handleImageUpload(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    setOcrLoading(true);
+    setOcrError(null);
+    setResult(null);
+    setAiResult(null);
+
+    try {
+      const {
+        data: { text },
+      } = await Tesseract.recognize(file, "fra+eng");
+
+      const cleanedText = text.trim();
+
+      if (!cleanedText) {
+        setOcrError(
+          "Aucun texte lisible détecté dans cette image. Essaie avec une capture plus nette."
+        );
+        return;
+      }
+
+      setValue(cleanedText);
+    } catch {
+      setOcrError(
+        "Impossible de lire cette image. Essaie avec une capture plus nette."
+      );
+    } finally {
+      setOcrLoading(false);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }
+
   async function handleAnalyze(customText?: string) {
-    if (cooldown > 0) {
+    if (cooldown > 0 || aiLoading || ocrLoading) {
       return;
     }
 
@@ -150,12 +194,14 @@ export default function App() {
     setValue(example);
     setResult(null);
     setAiResult(null);
+    setOcrError(null);
   }
 
   function resetAnalysis() {
     setValue("");
     setResult(null);
     setAiResult(null);
+    setOcrError(null);
   }
 
   function copyReport() {
@@ -224,7 +270,6 @@ ${aiBlock}
 
           <div className="hidden md:flex items-center gap-2 text-sm text-slate-500">
             <div className="h-2 w-2 rounded-full bg-emerald-500" />
-
             Analyse locale + IA ciblée
           </div>
         </header>
@@ -245,9 +290,7 @@ ${aiBlock}
         </div>
 
         <div className="grid gap-3">
-          <p className="text-sm text-slate-500">
-            Exemples fréquents :
-          </p>
+          <p className="text-sm text-slate-500">Exemples fréquents :</p>
 
           <div className="grid md:grid-cols-2 gap-3">
             {examples.map((example, index) => (
@@ -262,7 +305,7 @@ ${aiBlock}
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xl shadow-slate-200/50">
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xl shadow-slate-200/50 space-y-4">
           <textarea
             value={value}
             onChange={(event) => setValue(event.target.value)}
@@ -270,13 +313,45 @@ ${aiBlock}
             className="min-h-40 w-full resize-none bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 text-slate-900 outline-none focus:border-blue-500"
           />
 
-          <div className="flex gap-3 mt-4">
+          <div className="border border-dashed border-slate-300 rounded-2xl p-4 bg-slate-50">
+            <p className="font-medium text-slate-900">
+              Analyser une capture d’écran
+            </p>
+
+            <p className="text-sm text-slate-500 mt-1">
+              Ajoutez une image ou un screenshot : ClicSûr extrait le texte
+              automatiquement.
+            </p>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              disabled={ocrLoading || aiLoading}
+              className="mt-3 block w-full text-sm text-slate-600 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-blue-700 disabled:opacity-60"
+            />
+
+            {ocrLoading && (
+              <p className="text-sm text-blue-700 mt-3">
+                Lecture de l’image en cours...
+              </p>
+            )}
+
+            {ocrError && (
+              <p className="text-sm text-red-700 mt-3">{ocrError}</p>
+            )}
+          </div>
+
+          <div className="flex gap-3">
             <button
               onClick={() => handleAnalyze()}
-              disabled={aiLoading || cooldown > 0}
+              disabled={aiLoading || cooldown > 0 || ocrLoading}
               className="flex-1 bg-blue-600 text-white font-semibold rounded-2xl py-3 hover:bg-blue-700 transition disabled:opacity-60"
             >
-              {aiLoading
+              {ocrLoading
+                ? "Lecture image..."
+                : aiLoading
                 ? "Analyse en cours..."
                 : cooldown > 0
                 ? `Patientez ${cooldown}s`
@@ -305,9 +380,7 @@ ${aiBlock}
           >
             <div className="flex items-start justify-between gap-6">
               <div>
-                <p className="text-sm text-slate-500">
-                  Niveau de risque
-                </p>
+                <p className="text-sm text-slate-500">Niveau de risque</p>
 
                 <p className="mt-2 inline-flex rounded-full bg-white/70 px-3 py-1 text-sm font-medium text-slate-700 border border-slate-200">
                   {result.category}
@@ -335,9 +408,7 @@ ${aiBlock}
 
                 <p className="text-5xl font-bold text-slate-900">
                   {result.score}
-                  <span className="text-slate-400 text-2xl">
-                    /10
-                  </span>
+                  <span className="text-slate-400 text-2xl">/10</span>
                 </p>
               </div>
             </div>
@@ -363,9 +434,7 @@ ${aiBlock}
             )}
 
             <div className="bg-white border border-slate-200 rounded-2xl p-4">
-              <p className="font-semibold text-slate-900">
-                Recommandation
-              </p>
+              <p className="font-semibold text-slate-900">Recommandation</p>
 
               <p className="text-slate-600 mt-1">
                 {result.recommendation}
@@ -386,69 +455,55 @@ ${aiBlock}
                   Analyse locale suffisante
                 </p>
 
-                <p className="text-slate-600 mt-1">
-                  {aiResult.summary}
-                </p>
+                <p className="text-slate-600 mt-1">{aiResult.summary}</p>
               </div>
             )}
 
-            {aiResult &&
-              !aiResult.error &&
-              !aiResult.skipped && (
-                <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      Analyse IA
-                    </p>
+            {aiResult && !aiResult.error && !aiResult.skipped && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
+                <div>
+                  <p className="font-semibold text-slate-900">Analyse IA</p>
 
-                    <p className="text-slate-600 mt-1">
-                      {aiResult.summary}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="font-medium text-slate-900">
-                      Niveau détecté
-                    </p>
-
-                    <p className="text-slate-600">
-                      {aiResult.riskLevel}
-                    </p>
-                  </div>
-
-                  {Array.isArray(aiResult.explanation) && (
-                    <div>
-                      <p className="font-medium text-slate-900">
-                        Explications
-                      </p>
-
-                      <ul className="mt-2 space-y-2 text-slate-600">
-                        {aiResult.explanation.map(
-                          (item, index) => (
-                            <li key={index}>• {item}</li>
-                          )
-                        )}
-                      </ul>
-                    </div>
-                  )}
-
-                  <div>
-                    <p className="font-medium text-slate-900">
-                      Conseil IA
-                    </p>
-
-                    <p className="text-slate-600">
-                      {aiResult.advice}
-                    </p>
-                  </div>
+                  <p className="text-slate-600 mt-1">
+                    {aiResult.summary}
+                  </p>
                 </div>
-              )}
+
+                <div>
+                  <p className="font-medium text-slate-900">
+                    Niveau détecté
+                  </p>
+
+                  <p className="text-slate-600">
+                    {aiResult.riskLevel}
+                  </p>
+                </div>
+
+                {Array.isArray(aiResult.explanation) && (
+                  <div>
+                    <p className="font-medium text-slate-900">
+                      Explications
+                    </p>
+
+                    <ul className="mt-2 space-y-2 text-slate-600">
+                      {aiResult.explanation.map((item, index) => (
+                        <li key={index}>• {item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div>
+                  <p className="font-medium text-slate-900">Conseil IA</p>
+
+                  <p className="text-slate-600">{aiResult.advice}</p>
+                </div>
+              </div>
+            )}
 
             {aiResult?.error && (
               <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
-                <p className="text-red-700">
-                  {aiResult.error}
-                </p>
+                <p className="text-red-700">{aiResult.error}</p>
               </div>
             )}
 
@@ -467,9 +522,7 @@ ${aiBlock}
           <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="font-semibold text-lg">
-                  Analyses récentes
-                </h2>
+                <h2 className="font-semibold text-lg">Analyses récentes</h2>
 
                 <p className="text-sm text-slate-500">
                   Historique conservé uniquement sur cet appareil.
@@ -536,9 +589,9 @@ ${aiBlock}
 
         <div className="text-center text-sm text-slate-500 max-w-2xl mx-auto leading-relaxed">
           ClicSûr fournit une aide à la détection mais ne garantit pas
-          qu’un contenu soit totalement sûr ou frauduleux. Ne
-          communiquez jamais vos mots de passe, codes bancaires ou
-          informations sensibles depuis un lien reçu par message.
+          qu’un contenu soit totalement sûr ou frauduleux. Ne communiquez
+          jamais vos mots de passe, codes bancaires ou informations sensibles
+          depuis un lien reçu par message.
         </div>
       </section>
     </main>
