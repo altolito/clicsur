@@ -65,11 +65,22 @@ export default async function handler(req: any, res: any) {
   const ip = getClientIp(req);
   const rateLimit = checkRateLimit(ip);
 
+  console.log("AI analysis request", {
+    ip,
+    remaining: rateLimit.remaining,
+    allowed: rateLimit.allowed,
+  });
+
   res.setHeader("X-RateLimit-Limit", RATE_LIMIT_MAX_REQUESTS.toString());
   res.setHeader("X-RateLimit-Remaining", rateLimit.remaining.toString());
   res.setHeader("X-RateLimit-Reset", rateLimit.resetAt.toString());
 
   if (!rateLimit.allowed) {
+    console.warn("AI rate limit reached", {
+      ip,
+      resetAt: rateLimit.resetAt,
+    });
+
     return res.status(429).json({
       error:
         "Trop d’analyses IA en peu de temps. Réessayez dans quelques instants.",
