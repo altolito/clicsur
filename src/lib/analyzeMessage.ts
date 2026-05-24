@@ -12,6 +12,19 @@ export type AnalysisResult = {
   confidenceMessage: string;
 };
 
+type ThreatProfiles = {
+  marketing: number;
+  phishing: number;
+  financial: number;
+  identity: number;
+  fakeContest: number;
+  packageScam: number;
+  adminScam: number;
+  bankingScam: number;
+  familyScam: number;
+  techSupport: number;
+};
+
 const COMMON_BRANDS = [
   "ameli", "caf", "impots", "impôts", "chronopost", "mondial relay",
   "la poste", "netflix", "paypal", "amazon", "apple", "microsoft",
@@ -26,8 +39,37 @@ const MARKETING_SIGNALS = [
   "découvrez", "decouvrez", "profitez", "envie de", "stop",
 ];
 
+const URGENCY_SIGNALS = [
+  "urgence", "urgent", "immédiat", "immédiatement", "rapidement",
+  "dernier rappel", "sous 24h", "sous 48h", "expire", "expiration",
+  "dernier avertissement", "action requise", "jusqu'à dimanche",
+];
+
+const FINANCIAL_SIGNALS = [
+  "paiement", "carte bancaire", "virement", "iban", "1,99€", "2,99€",
+  "frais", "régulariser", "payer", "rembourser", "remboursement",
+  "transaction",
+];
+
+const IDENTITY_SIGNALS = [
+  "mot de passe", "code bancaire", "code de sécurité", "code confidentiel",
+  "identifiants", "connexion", "confirmez votre compte",
+  "vérifiez votre compte", "authentification",
+];
+
+const FAKE_CONTEST_SIGNALS = [
+  "félicitations", "felicitations", "vous avez gagné",
+  "vous pouvez gagner", "gagner un prix", "prix exclusif", "cadeau",
+  "récompense", "recompense", "tirage au sort", "lot gagné",
+  "gagnant", "coffret",
+];
+
 function includesAny(text: string, keywords: string[]) {
   return keywords.some((keyword) => text.includes(keyword));
+}
+
+function countMatches(text: string, keywords: string[]) {
+  return keywords.filter((keyword) => text.includes(keyword)).length;
 }
 
 function pushUnique(list: string[], value: string) {
@@ -42,8 +84,11 @@ function normalizeText(text: string) {
     .trim();
 }
 
-function countMatches(text: string, keywords: string[]) {
-  return keywords.filter((keyword) => text.includes(keyword)).length;
+function getDominantProfile(profiles: ThreatProfiles) {
+  return Object.entries(profiles).sort((a, b) => b[1] - a[1])[0] as [
+    keyof ThreatProfiles,
+    number
+  ];
 }
 
 export async function analyzeMessage(text: string): Promise<AnalysisResult> {
@@ -54,6 +99,19 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   const alerts: string[] = [];
   const technicalDetails: string[] = [];
+
+  const profiles: ThreatProfiles = {
+    marketing: 0,
+    phishing: 0,
+    financial: 0,
+    identity: 0,
+    fakeContest: 0,
+    packageScam: 0,
+    adminScam: 0,
+    bankingScam: 0,
+    familyScam: 0,
+    techSupport: 0,
+  };
 
   if (!lower) {
     return {
@@ -81,24 +139,49 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   const marketingCount = countMatches(lower, MARKETING_SIGNALS);
   const hasStopMention = /\bstop\s?\d{4,6}\b/i.test(text);
   const hasShortSmsNumber = /\b3\d{4}\b/.test(text);
-  const hasSensitiveKeywords = includesAny(lower, [
-    "mot de passe",
-    "code bancaire",
-    "code de sécurité",
-    "code confidentiel",
-    "carte bancaire",
-    "iban",
-    "identifiants",
-    "connexion",
-    "confirmez votre compte",
-    "vérifiez votre compte",
-  ]);
+  const hasSensitiveKeywords = includesAny(lower, IDENTITY_SIGNALS);
+  const hasFinancialKeywords = includesAny(lower, FINANCIAL_SIGNALS);
+  const hasUrgency = includesAny(lower, URGENCY_SIGNALS);
+  const hasFakeContestSignal = includesAny(lower, FAKE_CONTEST_SIGNALS);
+  const mentionsKnownBrand = COMMON_BRANDS.some((brand) =>
+    lower.includes(brand)
+  );
+
+  if (marketingCount >= 2) profiles.marketing += 3;
+  if (hasStopMention) profiles.marketing += 3;
+  if (hasShortSmsNumber) profiles.marketing += 1;
+
+  if (hasUrgency) {
+    score += 2;
+    profiles.phishing += 1;
+    profiles.financial += 1;
+    pushUnique(alerts, "Le message crée un sentiment d’urgence.");
+  }
+
+  if (hasFinancialKeywords) {
+    score += 3;
+    profiles.financial += 4;
+    category = "Demande de paiement suspecte";
+    pushUnique(
+      alerts,
+      "Une demande de paiement ou de régularisation a été détectée."
+    );
+  }
+
+  if (hasSensitiveKeywords) {
+    score += 3;
+    profiles.phishing += 4;
+    profiles.identity += 4;
+    category = "Compte ou identifiants menacés";
+    pushUnique(alerts, "Le message évoque des informations sensibles.");
+  }
 
   const looksLikeMarketingSms =
-    marketingCount >= 2 && hasStopMention && !hasSensitiveKeywords;
+    profiles.marketing >= 5 && !hasSensitiveKeywords && !hasFinancialKeywords;
 
   if (urls.length > 0) {
     score += looksLikeMarketingSms ? 1 : 2;
+    profiles.phishing += looksLikeMarketingSms ? 0 : 1;
     pushUnique(alerts, "Un lien a été détecté dans le message.");
     pushUnique(technicalDetails, `Nombre de liens détectés : ${urls.length}`);
   }
@@ -120,6 +203,10 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
     score += adjustedImpact;
 
+    if (adjustedImpact >= 2) {
+      profiles.phishing += 2;
+    }
+
     domainAnalysis.alerts.forEach((alert) => {
       if (looksLikeMarketingSms && alert.toLowerCase().includes("http")) {
         pushUnique(
@@ -136,18 +223,11 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       pushUnique(technicalDetails, detail);
     });
 
-    if (
-      domainAnalysis.alerts.some((alert) =>
-        alert.toLowerCase().includes("raccourcisseur")
-      )
-    ) {
-      category = "Lien masqué ou raccourci";
-    }
-
     const safeBrowsing = await checkSafeBrowsing(url);
 
     if (safeBrowsing.dangerous) {
       score += 4;
+      profiles.phishing += 5;
       category = "URL dangereuse détectée";
 
       pushUnique(
@@ -163,40 +243,8 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   if (urls.some((url) => url.length > 80)) {
     score += looksLikeMarketingSms ? 1 : 2;
+    profiles.phishing += looksLikeMarketingSms ? 0 : 1;
     pushUnique(alerts, "L’URL semble anormalement longue.");
-  }
-
-  if (
-    includesAny(lower, [
-      "urgence", "urgent", "immédiat", "immédiatement", "rapidement",
-      "dernier rappel", "sous 24h", "sous 48h", "expire", "expiration",
-      "dernier avertissement", "action requise",
-    ])
-  ) {
-    score += looksLikeMarketingSms ? 1 : 2;
-    pushUnique(alerts, "Le message crée un sentiment d’urgence.");
-  }
-
-  if (
-    includesAny(lower, [
-      "paiement", "carte bancaire", "virement", "iban", "1,99€", "2,99€",
-      "frais", "régulariser", "payer", "rembourser", "remboursement",
-      "transaction",
-    ])
-  ) {
-    score += 3;
-    category = "Demande de paiement suspecte";
-
-    pushUnique(
-      alerts,
-      "Une demande de paiement ou de régularisation a été détectée."
-    );
-  }
-
-  if (hasSensitiveKeywords) {
-    score += 3;
-    category = "Compte ou identifiants menacés";
-    pushUnique(alerts, "Le message évoque des informations sensibles.");
   }
 
   if (
@@ -206,6 +254,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     ])
   ) {
     score += 2;
+    profiles.packageScam += 4;
     category = "Arnaque au colis";
 
     pushUnique(
@@ -221,6 +270,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     ])
   ) {
     score += 2;
+    profiles.adminScam += 4;
     category = "Fausse administration";
 
     pushUnique(
@@ -236,20 +286,16 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     ])
   ) {
     score += 3;
+    profiles.bankingScam += 5;
+    profiles.phishing += 2;
     category = "Fausse alerte bancaire";
 
     pushUnique(alerts, "Le message ressemble à une alerte bancaire suspecte.");
   }
 
-  const hasFakeContestSignal = includesAny(lower, [
-    "félicitations", "felicitations", "vous avez gagné",
-    "vous pouvez gagner", "gagner un prix", "prix exclusif", "cadeau",
-    "récompense", "recompense", "tirage au sort", "lot gagné",
-    "gagnant", "coffret",
-  ]);
-
   if (hasFakeContestSignal) {
     score += 3;
+    profiles.fakeContest += 4;
     category = "Faux concours ou cadeau";
 
     pushUnique(
@@ -263,6 +309,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     includesAny(lower, ["gagner", "prix", "cadeau", "coffret"])
   ) {
     score += 3;
+    profiles.fakeContest += 4;
     category = "Faux concours ou cadeau";
 
     pushUnique(
@@ -276,6 +323,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     includesAny(lower, ["prix", "cadeau", "récompense", "recompense", "coffret"])
   ) {
     score += 2;
+    profiles.fakeContest += 3;
     category = "Faux concours ou cadeau";
 
     pushUnique(
@@ -284,11 +332,9 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     );
   }
 
-  if (
-    COMMON_BRANDS.some((brand) => lower.includes(brand)) &&
-    hasFakeContestSignal
-  ) {
+  if (mentionsKnownBrand && hasFakeContestSignal) {
     score += 2;
+    profiles.fakeContest += 2;
     category = "Usurpation possible de marque";
 
     pushUnique(
@@ -302,12 +348,9 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     );
   }
 
-  if (
-    COMMON_BRANDS.some((brand) => lower.includes(brand)) &&
-    domains.length > 0 &&
-    !looksLikeMarketingSms
-  ) {
+  if (mentionsKnownBrand && domains.length > 0 && !looksLikeMarketingSms) {
     score += 1;
+    profiles.phishing += 1;
 
     pushUnique(
       alerts,
@@ -323,6 +366,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     ])
   ) {
     score += 3;
+    profiles.familyScam += 5;
     category = "Arnaque au proche";
 
     pushUnique(
@@ -338,6 +382,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     ])
   ) {
     score += 3;
+    profiles.techSupport += 5;
     category = "Faux support technique";
 
     pushUnique(
@@ -346,10 +391,18 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     );
   }
 
-  if (looksLikeMarketingSms) {
-    category = "SMS marketing agressif";
+  const [dominantProfile, dominantScore] = getDominantProfile(profiles);
 
-    score = Math.min(score, hasSensitiveKeywords ? 6 : 5);
+  if (dominantScore > 0) {
+    pushUnique(
+      technicalDetails,
+      `Profil dominant détecté : ${dominantProfile}`
+    );
+  }
+
+  if (looksLikeMarketingSms && dominantProfile === "marketing") {
+    category = "SMS marketing agressif";
+    score = Math.min(score, 5);
 
     pushUnique(
       alerts,
@@ -367,6 +420,24 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
         "Numéro court détecté, fréquent dans les campagnes SMS commerciales."
       );
     }
+  } else if (dominantProfile === "phishing" || dominantProfile === "identity") {
+    category = "Phishing probable";
+  } else if (dominantProfile === "financial") {
+    category = "Tentative financière suspecte";
+  } else if (dominantProfile === "fakeContest") {
+    category = mentionsKnownBrand
+      ? "Usurpation possible de marque"
+      : "Faux concours ou cadeau";
+  } else if (dominantProfile === "packageScam") {
+    category = "Arnaque au colis";
+  } else if (dominantProfile === "adminScam") {
+    category = "Fausse administration";
+  } else if (dominantProfile === "bankingScam") {
+    category = "Fausse alerte bancaire";
+  } else if (dominantProfile === "familyScam") {
+    category = "Arnaque au proche";
+  } else if (dominantProfile === "techSupport") {
+    category = "Faux support technique";
   }
 
   if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(text)) {
@@ -381,7 +452,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   let confidenceMessage = "Aucun signal majeur détecté.";
 
-  if (looksLikeMarketingSms) {
+  if (looksLikeMarketingSms && dominantProfile === "marketing") {
     confidenceMessage =
       "Le message semble surtout relever d’un SMS commercial agressif.";
   } else if (finalScore >= 8) {
