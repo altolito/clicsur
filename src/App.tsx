@@ -39,6 +39,7 @@ export default function App() {
   const [cooldown, setCooldown] = useState(0);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const resultRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -69,12 +70,48 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [cooldown]);
 
-  async function handleImageUpload(
-    event: React.ChangeEvent<HTMLInputElement>
-  ) {
-    const file = event.target.files?.[0];
+  async function prepareImageForOcr(file: File) {
+    const imageBitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
 
-    if (!file) return;
+    const maxWidth = 1400;
+    const scale = Math.min(1, maxWidth / imageBitmap.width);
+
+    canvas.width = Math.round(imageBitmap.width * scale);
+    canvas.height = Math.round(imageBitmap.height * scale);
+
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      throw new Error("Canvas non disponible");
+    }
+
+    ctx.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
+
+    const compressedBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.85);
+    });
+
+    if (!compressedBlob) {
+      throw new Error("Compression impossible");
+    }
+
+    return compressedBlob;
+  }
+
+  function cleanOcrText(text: string) {
+    return text
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/[|]/g, "I")
+      .trim();
+  }
+
+  async function processImageFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setOcrError("Le fichier sélectionné n’est pas une image.");
+      return;
+    }
 
     setOcrLoading(true);
     setOcrError(null);
@@ -82,11 +119,13 @@ export default function App() {
     setAiResult(null);
 
     try {
+      const compressedImage = await prepareImageForOcr(file);
+
       const {
         data: { text },
-      } = await Tesseract.recognize(file, "fra+eng");
+      } = await Tesseract.recognize(compressedImage, "fra+eng");
 
-      const cleanedText = text.trim();
+      const cleanedText = cleanOcrText(text);
 
       if (!cleanedText) {
         setOcrError(
@@ -96,12 +135,19 @@ export default function App() {
       }
 
       setValue(cleanedText);
-    } catch {
+
+      await handleAnalyze(cleanedText, {
+        allowDuringOcr: true,
+      });
+    } catch (error) {
+      console.error(error);
+
       setOcrError(
         "Impossible de lire cette image. Essaie avec une capture plus nette."
       );
     } finally {
       setOcrLoading(false);
+      setIsDragging(false);
 
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -109,8 +155,25 @@ export default function App() {
     }
   }
 
-  async function handleAnalyze(customText?: string) {
-    if (cooldown > 0 || aiLoading || ocrLoading) {
+  async function handleImageUpload(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    await processImageFile(file);
+  }
+
+  async function handleAnalyze(
+    customText?: string,
+    options?: { allowDuringOcr?: boolean }
+  ) {
+    if (
+      cooldown > 0 ||
+      aiLoading ||
+      (ocrLoading && !options?.allowDuringOcr)
+    ) {
       return;
     }
 
@@ -306,12 +369,39 @@ ${aiBlock}
         </div>
 
         <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xl shadow-slate-200/50 space-y-4">
-          <textarea
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            placeholder="Collez ici un SMS, un email ou une URL..."
-            className="min-h-40 w-full resize-none bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 text-slate-900 outline-none focus:border-blue-500"
-          />
+          <div
+            onDragOver={(event) => {
+              event.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setIsDragging(false);
+
+              const file = event.dataTransfer.files?.[0];
+
+              if (!file) return;
+
+              processImageFile(file);
+            }}
+            className={`rounded-2xl border-2 border-dashed p-3 transition ${
+              isDragging
+                ? "border-blue-500 bg-blue-50"
+                : "border-slate-200 bg-white"
+            }`}
+          >
+            <textarea
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              placeholder="Collez ici un SMS, un email ou une URL... ou déposez une capture d’écran dans cette zone."
+              className="min-h-40 w-full resize-none bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4 text-slate-900 outline-none focus:border-blue-500"
+            />
+
+            <p className="mt-2 text-xs text-slate-500">
+              Vous pouvez aussi glisser-déposer une capture d’écran ici.
+            </p>
+          </div>
 
           <div className="border border-dashed border-slate-300 rounded-2xl p-4 bg-slate-50">
             <p className="font-medium text-slate-900">
@@ -319,8 +409,8 @@ ${aiBlock}
             </p>
 
             <p className="text-sm text-slate-500 mt-1">
-              Ajoutez une image ou un screenshot : ClicSûr extrait le texte
-              automatiquement.
+              Ajoutez une image ou un screenshot : ClicSûr extrait le texte,
+              le nettoie puis lance l’analyse automatiquement.
             </p>
 
             <input

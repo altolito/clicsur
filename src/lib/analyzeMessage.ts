@@ -13,29 +13,17 @@ export type AnalysisResult = {
 };
 
 const COMMON_BRANDS = [
-  "ameli",
-  "caf",
-  "impots",
-  "impôts",
-  "chronopost",
-  "mondial relay",
-  "la poste",
-  "netflix",
-  "paypal",
-  "amazon",
-  "apple",
-  "microsoft",
-  "google",
-  "banque",
-  "cpam",
-  "cpf",
-  "makita",
-  "bosch",
-  "dewalt",
-  "leroy merlin",
-  "castorama",
-  "brico dépôt",
-  "brico depot",
+  "ameli", "caf", "impots", "impôts", "chronopost", "mondial relay",
+  "la poste", "netflix", "paypal", "amazon", "apple", "microsoft",
+  "google", "banque", "cpam", "cpf", "makita", "bosch", "dewalt",
+  "leroy merlin", "castorama", "brico dépôt", "brico depot",
+  "commejaime", "comme j'aime", "comme j aime",
+];
+
+const MARKETING_SIGNALS = [
+  "offre", "offres", "promo", "promotion", "réduction", "reduction",
+  "-50%", "jusqu'à", "jusqua", "offert", "offerts", "gratuit",
+  "découvrez", "decouvrez", "profitez", "envie de", "stop",
 ];
 
 function includesAny(text: string, keywords: string[]) {
@@ -43,9 +31,7 @@ function includesAny(text: string, keywords: string[]) {
 }
 
 function pushUnique(list: string[], value: string) {
-  if (!list.includes(value)) {
-    list.push(value);
-  }
+  if (!list.includes(value)) list.push(value);
 }
 
 function normalizeText(text: string) {
@@ -56,9 +42,11 @@ function normalizeText(text: string) {
     .trim();
 }
 
-export async function analyzeMessage(
-  text: string
-): Promise<AnalysisResult> {
+function countMatches(text: string, keywords: string[]) {
+  return keywords.filter((keyword) => text.includes(keyword)).length;
+}
+
+export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   const lower = normalizeText(text);
 
   let score = 0;
@@ -90,10 +78,29 @@ export async function analyzeMessage(
     .map((url) => extractDomain(url))
     .filter((domain): domain is string => Boolean(domain));
 
+  const marketingCount = countMatches(lower, MARKETING_SIGNALS);
+  const hasStopMention = /\bstop\s?\d{4,6}\b/i.test(text);
+  const hasShortSmsNumber = /\b3\d{4}\b/.test(text);
+  const hasSensitiveKeywords = includesAny(lower, [
+    "mot de passe",
+    "code bancaire",
+    "code de sécurité",
+    "code confidentiel",
+    "carte bancaire",
+    "iban",
+    "identifiants",
+    "connexion",
+    "confirmez votre compte",
+    "vérifiez votre compte",
+  ]);
+
+  const looksLikeMarketingSms =
+    marketingCount >= 2 && hasStopMention && !hasSensitiveKeywords;
+
   if (urls.length > 0) {
-    score += 2;
+    score += looksLikeMarketingSms ? 1 : 2;
     pushUnique(alerts, "Un lien a été détecté dans le message.");
-    technicalDetails.push(`Nombre de liens détectés : ${urls.length}`);
+    pushUnique(technicalDetails, `Nombre de liens détectés : ${urls.length}`);
   }
 
   for (const url of urls) {
@@ -101,9 +108,27 @@ export async function analyzeMessage(
 
     if (!domainAnalysis) continue;
 
-    score += domainAnalysis.scoreImpact;
+    const isSmsRedirect =
+      url.toLowerCase().includes("lsms.fr") ||
+      url.toLowerCase().includes("sms") ||
+      url.toLowerCase().includes("lien");
+
+    const adjustedImpact =
+      looksLikeMarketingSms && isSmsRedirect
+        ? Math.min(domainAnalysis.scoreImpact, 1)
+        : domainAnalysis.scoreImpact;
+
+    score += adjustedImpact;
 
     domainAnalysis.alerts.forEach((alert) => {
+      if (looksLikeMarketingSms && alert.toLowerCase().includes("http")) {
+        pushUnique(
+          technicalDetails,
+          "Lien HTTP détecté, fréquent dans certaines plateformes SMS marketing."
+        );
+        return;
+      }
+
       pushUnique(alerts, alert);
     });
 
@@ -137,43 +162,25 @@ export async function analyzeMessage(
   }
 
   if (urls.some((url) => url.length > 80)) {
-    score += 2;
+    score += looksLikeMarketingSms ? 1 : 2;
     pushUnique(alerts, "L’URL semble anormalement longue.");
   }
 
   if (
     includesAny(lower, [
-      "urgence",
-      "urgent",
-      "immédiat",
-      "immédiatement",
-      "rapidement",
-      "dernier rappel",
-      "sous 24h",
-      "sous 48h",
-      "expire",
-      "expiration",
-      "dernier avertissement",
-      "action requise",
+      "urgence", "urgent", "immédiat", "immédiatement", "rapidement",
+      "dernier rappel", "sous 24h", "sous 48h", "expire", "expiration",
+      "dernier avertissement", "action requise",
     ])
   ) {
-    score += 2;
+    score += looksLikeMarketingSms ? 1 : 2;
     pushUnique(alerts, "Le message crée un sentiment d’urgence.");
   }
 
   if (
     includesAny(lower, [
-      "paiement",
-      "carte bancaire",
-      "virement",
-      "iban",
-      "1,99€",
-      "2,99€",
-      "frais",
-      "régulariser",
-      "payer",
-      "rembourser",
-      "remboursement",
+      "paiement", "carte bancaire", "virement", "iban", "1,99€", "2,99€",
+      "frais", "régulariser", "payer", "rembourser", "remboursement",
       "transaction",
     ])
   ) {
@@ -186,36 +193,16 @@ export async function analyzeMessage(
     );
   }
 
-  if (
-    includesAny(lower, [
-      "mot de passe",
-      "compte suspendu",
-      "compte bloqué",
-      "connexion",
-      "identifiants",
-      "code de sécurité",
-      "code confidentiel",
-      "confirmez votre compte",
-      "vérifiez votre compte",
-      "authentification",
-    ])
-  ) {
+  if (hasSensitiveKeywords) {
     score += 3;
     category = "Compte ou identifiants menacés";
-
     pushUnique(alerts, "Le message évoque des informations sensibles.");
   }
 
   if (
     includesAny(lower, [
-      "colis",
-      "livraison",
-      "chronopost",
-      "mondial relay",
-      "la poste",
-      "point relais",
-      "frais de livraison",
-      "votre colis est bloqué",
+      "colis", "livraison", "chronopost", "mondial relay", "la poste",
+      "point relais", "frais de livraison", "votre colis est bloqué",
     ])
   ) {
     score += 2;
@@ -229,17 +216,8 @@ export async function analyzeMessage(
 
   if (
     includesAny(lower, [
-      "amende",
-      "antai",
-      "impôts",
-      "impots",
-      "ameli",
-      "assurance maladie",
-      "carte vitale",
-      "caf",
-      "cpf",
-      "gouv",
-      "service public",
+      "amende", "antai", "impôts", "impots", "ameli", "assurance maladie",
+      "carte vitale", "caf", "cpf", "gouv", "service public",
     ])
   ) {
     score += 2;
@@ -253,13 +231,8 @@ export async function analyzeMessage(
 
   if (
     includesAny(lower, [
-      "banque",
-      "compte bancaire",
-      "opposition",
-      "sécuriser votre compte",
-      "activité suspecte",
-      "paiement refusé",
-      "nouveau bénéficiaire",
+      "banque", "compte bancaire", "opposition", "sécuriser votre compte",
+      "activité suspecte", "paiement refusé", "nouveau bénéficiaire",
     ])
   ) {
     score += 3;
@@ -269,19 +242,10 @@ export async function analyzeMessage(
   }
 
   const hasFakeContestSignal = includesAny(lower, [
-    "félicitations",
-    "felicitations",
-    "vous avez gagné",
-    "vous pouvez gagner",
-    "gagner un prix",
-    "prix exclusif",
-    "cadeau",
-    "récompense",
-    "recompense",
-    "tirage au sort",
-    "lot gagné",
-    "gagnant",
-    "coffret",
+    "félicitations", "felicitations", "vous avez gagné",
+    "vous pouvez gagner", "gagner un prix", "prix exclusif", "cadeau",
+    "récompense", "recompense", "tirage au sort", "lot gagné",
+    "gagnant", "coffret",
   ]);
 
   if (hasFakeContestSignal) {
@@ -340,7 +304,8 @@ export async function analyzeMessage(
 
   if (
     COMMON_BRANDS.some((brand) => lower.includes(brand)) &&
-    domains.length > 0
+    domains.length > 0 &&
+    !looksLikeMarketingSms
   ) {
     score += 1;
 
@@ -352,13 +317,8 @@ export async function analyzeMessage(
 
   if (
     includesAny(lower, [
-      "maman",
-      "papa",
-      "j’ai changé de numéro",
-      "j'ai changé de numéro",
-      "nouveau numéro",
-      "virement rapidement",
-      "je suis bloqué",
+      "maman", "papa", "j’ai changé de numéro", "j'ai changé de numéro",
+      "nouveau numéro", "virement rapidement", "je suis bloqué",
       "je ne peux pas appeler",
     ])
   ) {
@@ -373,13 +333,8 @@ export async function analyzeMessage(
 
   if (
     includesAny(lower, [
-      "support microsoft",
-      "ordinateur infecté",
-      "virus détecté",
-      "votre pc est bloqué",
-      "assistance technique",
-      "teamviewer",
-      "anydesk",
+      "support microsoft", "ordinateur infecté", "virus détecté",
+      "votre pc est bloqué", "assistance technique", "teamviewer", "anydesk",
     ])
   ) {
     score += 3;
@@ -391,6 +346,29 @@ export async function analyzeMessage(
     );
   }
 
+  if (looksLikeMarketingSms) {
+    category = "SMS marketing agressif";
+
+    score = Math.min(score, hasSensitiveKeywords ? 6 : 5);
+
+    pushUnique(
+      alerts,
+      "Le message ressemble davantage à une campagne marketing SMS qu’à un phishing."
+    );
+
+    pushUnique(
+      technicalDetails,
+      "Présence d’un mécanisme STOP typique des SMS marketing."
+    );
+
+    if (hasShortSmsNumber) {
+      pushUnique(
+        technicalDetails,
+        "Numéro court détecté, fréquent dans les campagnes SMS commerciales."
+      );
+    }
+  }
+
   if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(text)) {
     pushUnique(technicalDetails, "Adresse email détectée dans le contenu.");
   }
@@ -399,11 +377,14 @@ export async function analyzeMessage(
     pushUnique(technicalDetails, "Numéro de téléphone détecté dans le contenu.");
   }
 
-  const finalScore = Math.min(score, 10);
+  const finalScore = Math.max(0, Math.min(score, 10));
 
   let confidenceMessage = "Aucun signal majeur détecté.";
 
-  if (finalScore >= 8) {
+  if (looksLikeMarketingSms) {
+    confidenceMessage =
+      "Le message semble surtout relever d’un SMS commercial agressif.";
+  } else if (finalScore >= 8) {
     confidenceMessage = "Très probablement frauduleux.";
   } else if (finalScore >= 6) {
     confidenceMessage =
@@ -432,8 +413,9 @@ export async function analyzeMessage(
       color: "yellow",
       score: finalScore,
       alerts,
-      recommendation:
-        "Vérifiez l’expéditeur, le domaine du lien et évitez de cliquer trop rapidement.",
+      recommendation: looksLikeMarketingSms
+        ? "Ne cliquez pas si vous n’êtes pas sûr de l’expéditeur. Utilisez le STOP si vous ne souhaitez plus recevoir ces SMS."
+        : "Vérifiez l’expéditeur, le domaine du lien et évitez de cliquer trop rapidement.",
       technicalDetails,
       category,
       confidenceMessage,
