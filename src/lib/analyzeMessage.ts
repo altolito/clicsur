@@ -6,6 +6,7 @@ export type AnalysisResult = {
   color: "emerald" | "yellow" | "red";
   score: number;
   alerts: string[];
+  safeSignals: string[];
   recommendation: string;
   technicalDetails: string[];
   category: string;
@@ -98,6 +99,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   let category = "Analyse générale";
 
   const alerts: string[] = [];
+  const safeSignals: string[] = [];
   const technicalDetails: string[] = [];
 
   const profiles: ThreatProfiles = {
@@ -119,6 +121,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       color: "emerald",
       score: 0,
       alerts: ["Aucun texte à analyser."],
+      safeSignals: [],
       recommendation:
         "Collez un SMS, un email ou un message suspect pour lancer l’analyse.",
       technicalDetails: [],
@@ -151,6 +154,20 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   if (hasStopMention) profiles.marketing += 3;
   if (hasShortSmsNumber) profiles.marketing += 1;
 
+  if (hasStopMention) {
+    pushUnique(
+      safeSignals,
+      "Présence d’un mécanisme STOP souvent utilisé dans les SMS commerciaux."
+    );
+  }
+
+  if (hasShortSmsNumber) {
+    pushUnique(
+      safeSignals,
+      "Le message utilise un numéro court fréquent dans les campagnes SMS déclarées."
+    );
+  }
+
   if (hasUrgency) {
     score += 2;
     profiles.phishing += 1;
@@ -162,6 +179,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     score += 3;
     profiles.financial += 4;
     category = "Demande de paiement suspecte";
+
     pushUnique(
       alerts,
       "Une demande de paiement ou de régularisation a été détectée."
@@ -173,15 +191,31 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     profiles.phishing += 4;
     profiles.identity += 4;
     category = "Compte ou identifiants menacés";
+
     pushUnique(alerts, "Le message évoque des informations sensibles.");
   }
 
   const looksLikeMarketingSms =
     profiles.marketing >= 5 && !hasSensitiveKeywords && !hasFinancialKeywords;
 
+  if (looksLikeMarketingSms && !hasSensitiveKeywords) {
+    pushUnique(
+      safeSignals,
+      "Aucune demande d’identifiants ou de mot de passe détectée."
+    );
+  }
+
+  if (looksLikeMarketingSms && !hasFinancialKeywords) {
+    pushUnique(
+      safeSignals,
+      "Aucune demande directe de paiement détectée."
+    );
+  }
+
   if (urls.length > 0) {
     score += looksLikeMarketingSms ? 1 : 2;
     profiles.phishing += looksLikeMarketingSms ? 0 : 1;
+
     pushUnique(alerts, "Un lien a été détecté dans le message.");
     pushUnique(technicalDetails, `Nombre de liens détectés : ${urls.length}`);
   }
@@ -470,6 +504,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       color: "emerald",
       score: finalScore,
       alerts: alerts.length ? alerts : ["Aucun signal critique détecté."],
+      safeSignals,
       recommendation:
         "Le contenu semble relativement sûr, mais restez vigilant.",
       technicalDetails,
@@ -484,6 +519,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       color: "yellow",
       score: finalScore,
       alerts,
+      safeSignals,
       recommendation: looksLikeMarketingSms
         ? "Ne cliquez pas si vous n’êtes pas sûr de l’expéditeur. Utilisez le STOP si vous ne souhaitez plus recevoir ces SMS."
         : "Vérifiez l’expéditeur, le domaine du lien et évitez de cliquer trop rapidement.",
@@ -498,6 +534,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     color: "red",
     score: finalScore,
     alerts,
+    safeSignals,
     recommendation:
       "Ne cliquez pas. Vérifiez l’information depuis le site officiel ou un canal connu.",
     technicalDetails,
