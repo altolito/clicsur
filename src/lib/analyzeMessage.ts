@@ -1,5 +1,6 @@
 import { analyzeDomain, extractDomain } from "./domainAnalysis";
 import { checkSafeBrowsing } from "./checkSafeBrowsing";
+import { getDomainReputation } from "./domainReputation";
 
 export type AnalysisResult = {
   risk: "Faible" | "Moyen" | "Élevé";
@@ -36,10 +37,7 @@ const COMMON_BRANDS = [
   "commejaime", "comme j'aime", "comme j aime",
 ];
 
-const KNOWN_SMS_MARKETING_DOMAINS = [
-  "lsms.fr",
-  "isms.fr",
-];
+const KNOWN_SMS_MARKETING_DOMAINS = ["lsms.fr", "isms.fr"];
 
 const KNOWN_MARKETING_PLATFORMS = [
   "brevo.com",
@@ -104,8 +102,9 @@ function normalizeText(text: string) {
 function isKnownMarketingDomain(domain: string) {
   return (
     KNOWN_SMS_MARKETING_DOMAINS.includes(domain) ||
-    KNOWN_MARKETING_PLATFORMS.some((knownDomain) =>
-      domain === knownDomain || domain.endsWith(`.${knownDomain}`)
+    KNOWN_MARKETING_PLATFORMS.some(
+      (knownDomain) =>
+        domain === knownDomain || domain.endsWith(`.${knownDomain}`)
     )
   );
 }
@@ -201,9 +200,22 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     .map((url) => extractDomain(url))
     .filter((domain): domain is string => Boolean(domain));
 
-  const hasKnownMarketingDomain = domains.some((domain) =>
-    isKnownMarketingDomain(domain)
+  const domainReputations = domains.map((domain) => ({
+    domain,
+    reputation: getDomainReputation(domain),
+  }));
+
+  const hasMarketingReputation = domainReputations.some(
+    (item) => item.reputation.reputation === "marketing"
   );
+
+  const hasDangerousReputation = domainReputations.some(
+    (item) => item.reputation.reputation === "dangerous"
+  );
+
+  const hasKnownMarketingDomain =
+    domains.some((domain) => isKnownMarketingDomain(domain)) ||
+    hasMarketingReputation;
 
   const marketingCount = countMatches(lower, MARKETING_SIGNALS);
   const hasStopMention = /\bstop\s?\d{4,6}\b/i.test(text);
@@ -220,6 +232,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   if (hasStopMention) profiles.marketing += 3;
   if (hasShortSmsNumber) profiles.marketing += 1;
   if (hasKnownMarketingDomain) profiles.marketing += 2;
+  if (hasMarketingReputation) profiles.marketing += 3;
 
   if (hasStopMention) {
     pushUnique(
@@ -241,12 +254,44 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       "Le lien utilise une plateforme ou un domaine courant dans les campagnes marketing."
     );
 
+    const knownMarketingDomains = domains.filter(
+      (domain) =>
+        isKnownMarketingDomain(domain) ||
+        getDomainReputation(domain).reputation === "marketing"
+    );
+
     pushUnique(
       technicalDetails,
-      `Domaine marketing connu détecté : ${domains
-        .filter((domain) => isKnownMarketingDomain(domain))
-        .join(", ")}`
+      `Domaine marketing connu détecté : ${knownMarketingDomains.join(", ")}`
     );
+  }
+
+  if (
+    hasMarketingReputation &&
+    !hasSensitiveKeywords &&
+    !hasFinancialKeywords
+  ) {
+    score = Math.max(0, score - 1);
+
+    pushUnique(
+      safeSignals,
+      "Le domaine possède une réputation marketing connue."
+    );
+
+    pushUnique(technicalDetails, "Réputation domaine : marketing connu.");
+  }
+
+  if (hasDangerousReputation) {
+    score += 5;
+    profiles.phishing += 5;
+    category = "Domaine dangereux connu";
+
+    pushUnique(
+      alerts,
+      "Le domaine est connu comme dangereux ou frauduleux."
+    );
+
+    pushUnique(technicalDetails, "Réputation domaine : dangereux connu.");
   }
 
   if (hasUrgency) {
@@ -277,7 +322,10 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   }
 
   const looksLikeMarketingSms =
-    profiles.marketing >= 5 && !hasSensitiveKeywords && !hasFinancialKeywords;
+    profiles.marketing >= 5 &&
+    !hasSensitiveKeywords &&
+    !hasFinancialKeywords &&
+    !hasDangerousReputation;
 
   if (looksLikeMarketingSms && !hasSensitiveKeywords) {
     pushUnique(
@@ -326,10 +374,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     }
 
     domainAnalysis.alerts.forEach((alert) => {
-      if (
-        looksLikeMarketingSms &&
-        alert.toLowerCase().includes("http")
-      ) {
+      if (looksLikeMarketingSms && alert.toLowerCase().includes("http")) {
         pushUnique(
           technicalDetails,
           "Lien HTTP détecté, fréquent dans certaines plateformes SMS marketing."
@@ -587,6 +632,9 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     confidenceMessage = hasKnownMarketingDomain
       ? "Le message semble provenir d’une campagne SMS marketing identifiable."
       : "Le message semble surtout relever d’un SMS commercial agressif.";
+  } else if (hasDangerousReputation) {
+    confidenceMessage =
+      "Le domaine utilisé est connu comme suspect ou dangereux.";
   } else if (finalScore >= 8) {
     confidenceMessage = "Très probablement frauduleux.";
   } else if (finalScore >= 6) {
