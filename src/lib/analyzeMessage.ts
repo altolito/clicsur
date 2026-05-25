@@ -254,11 +254,13 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       "Le lien utilise une plateforme ou un domaine courant dans les campagnes marketing."
     );
 
-    const knownMarketingDomains = domains.filter(
-      (domain) =>
-        isKnownMarketingDomain(domain) ||
-        getDomainReputation(domain).reputation === "marketing"
-    );
+    const knownMarketingDomains = [...new Set(
+  domains.filter(
+    (domain) =>
+      isKnownMarketingDomain(domain) ||
+      getDomainReputation(domain).reputation === "marketing"
+  )
+)];
 
     pushUnique(
       technicalDetails,
