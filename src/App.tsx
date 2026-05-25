@@ -270,6 +270,15 @@ export default function App() {
   function copyReport() {
     if (!result) return;
 
+    const safeSignalsBlock =
+      result.safeSignals && result.safeSignals.length > 0
+        ? `
+
+Éléments rassurants :
+${result.safeSignals.map((item) => `- ${item}`).join("\n")}
+`
+        : "";
+
     const aiBlock =
       aiResult && !aiResult.error && !aiResult.skipped
         ? `
@@ -298,12 +307,15 @@ Analyse ClicSûr
 Niveau de risque : ${result.risk}
 Score : ${result.score}/10
 Catégorie : ${result.category}
+Objectif probable : ${result.likelyIntent || "Indéterminé"}
+Niveau de confiance : ${result.confidenceLevel || "Non évalué"}
 
 Conclusion :
 ${result.confidenceMessage}
 
 Alertes :
 ${result.alerts.map((alert) => `- ${alert}`).join("\n")}
+${safeSignalsBlock}
 
 Recommandation :
 ${result.recommendation}
@@ -491,6 +503,28 @@ ${aiBlock}
                 <p className="mt-2 text-slate-600 font-medium">
                   {result.confidenceMessage}
                 </p>
+
+                <div className="mt-4 grid md:grid-cols-2 gap-4">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                    <p className="text-sm text-slate-500">
+                      Objectif probable
+                    </p>
+
+                    <p className="mt-1 font-semibold text-slate-900">
+                      {result.likelyIntent || "Indéterminé"}
+                    </p>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                    <p className="text-sm text-slate-500">
+                      Niveau de confiance
+                    </p>
+
+                    <p className="mt-1 font-semibold text-slate-900">
+                      {result.confidenceLevel || "Non évalué"}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="text-right shrink-0">
@@ -518,6 +552,20 @@ ${aiBlock}
                 <ul className="mt-2 space-y-2 text-slate-600">
                   {result.technicalDetails.map((detail, index) => (
                     <li key={index}>• {detail}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {result.safeSignals && result.safeSignals.length > 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+                <p className="font-semibold text-emerald-800">
+                  Éléments rassurants
+                </p>
+
+                <ul className="mt-2 space-y-2 text-emerald-700">
+                  {result.safeSignals.map((item, index) => (
+                    <li key={index}>• {item}</li>
                   ))}
                 </ul>
               </div>

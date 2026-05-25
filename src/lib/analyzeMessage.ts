@@ -11,6 +11,8 @@ export type AnalysisResult = {
   technicalDetails: string[];
   category: string;
   confidenceMessage: string;
+  likelyIntent: string;
+  confidenceLevel: "Faible" | "Moyenne" | "Élevée";
 };
 
 type ThreatProfiles = {
@@ -92,6 +94,41 @@ function getDominantProfile(profiles: ThreatProfiles) {
   ];
 }
 
+function getLikelyIntent(profile: keyof ThreatProfiles) {
+  switch (profile) {
+    case "marketing":
+      return "Publicité ou campagne marketing";
+    case "phishing":
+    case "identity":
+      return "Vol d’identifiants";
+    case "financial":
+      return "Paiement frauduleux";
+    case "packageScam":
+      return "Fausse livraison ou faux colis";
+    case "adminScam":
+      return "Usurpation administrative";
+    case "bankingScam":
+      return "Récupération bancaire";
+    case "fakeContest":
+      return "Collecte de clics ou données personnelles";
+    case "familyScam":
+      return "Manipulation émotionnelle";
+    case "techSupport":
+      return "Prise de contrôle informatique";
+    default:
+      return "Indéterminé";
+  }
+}
+
+function getConfidenceLevel(
+  finalScore: number,
+  dominantScore: number
+): "Faible" | "Moyenne" | "Élevée" {
+  if (finalScore >= 7 || dominantScore >= 5) return "Élevée";
+  if (finalScore >= 3 || dominantScore >= 3) return "Moyenne";
+  return "Faible";
+}
+
 export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   const lower = normalizeText(text);
 
@@ -127,6 +164,8 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       technicalDetails: [],
       category: "Aucune analyse",
       confidenceMessage: "Analyse impossible sans contenu.",
+      likelyIntent: "Indéterminé",
+      confidenceLevel: "Faible",
     };
   }
 
@@ -426,6 +465,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   }
 
   const [dominantProfile, dominantScore] = getDominantProfile(profiles);
+  const likelyIntent = getLikelyIntent(dominantProfile);
 
   if (dominantScore > 0) {
     pushUnique(
@@ -483,6 +523,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   }
 
   const finalScore = Math.max(0, Math.min(score, 10));
+  const confidenceLevel = getConfidenceLevel(finalScore, dominantScore);
 
   let confidenceMessage = "Aucun signal majeur détecté.";
 
@@ -510,6 +551,8 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       technicalDetails,
       category,
       confidenceMessage,
+      likelyIntent,
+      confidenceLevel,
     };
   }
 
@@ -526,6 +569,8 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       technicalDetails,
       category,
       confidenceMessage,
+      likelyIntent,
+      confidenceLevel,
     };
   }
 
@@ -540,5 +585,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     technicalDetails,
     category,
     confidenceMessage,
+    likelyIntent,
+    confidenceLevel,
   };
 }
