@@ -271,19 +271,19 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   }
 
   if (
-    hasMarketingReputation &&
-    !hasSensitiveKeywords &&
-    !hasFinancialKeywords
-  ) {
-    score = Math.max(0, score - 1);
+  hasMarketingReputation &&
+  !hasSensitiveKeywords &&
+  !hasFinancialKeywords
+) {
+  score = Math.max(score, 3);
 
-    pushUnique(
-      safeSignals,
-      "Le domaine possède une réputation marketing connue."
-    );
+  pushUnique(
+    safeSignals,
+    "Le domaine possède une réputation marketing connue."
+  );
 
-    pushUnique(technicalDetails, "Réputation domaine : marketing connu.");
-  }
+  pushUnique(technicalDetails, "Réputation domaine : marketing connu.");
+}
 
   if (hasDangerousReputation) {
     score += 5;
