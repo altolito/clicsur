@@ -1,0 +1,8 @@
+[
+  {
+    "text": "Votre rendez-vous médical est confirmé demain à 14h30.",
+    "label": "safe_message",
+    "risk": "low",
+    "expectedCategory": "Analyse générale"
+  }
+]

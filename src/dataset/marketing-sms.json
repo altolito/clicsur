@@ -1,0 +1,14 @@
+[
+  {
+    "text": "COMME J’AIME : jusqu’à dimanche, profitez de 2 semaines offertes. STOP 36180",
+    "label": "marketing_sms",
+    "risk": "medium",
+    "expectedCategory": "SMS marketing identifié"
+  },
+  {
+    "text": "Offre spéciale : -50% sur notre programme minceur. Cliquez pour découvrir. STOP 36180",
+    "label": "marketing_sms",
+    "risk": "medium",
+    "expectedCategory": "SMS marketing agressif"
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "text": "La Poste : votre colis est suspendu. Des frais de livraison de 1,99€ sont requis sous 24h. Récupérez votre colis ici : http://suivi-livraison-client.xyz",
+    "label": "package_scam",
+    "risk": "high",
+    "expectedCategory": "Arnaque au colis"
+  },
+  {
+    "text": "Chronopost : votre colis est bloqué. Veuillez régler les frais de livraison pour finaliser l’envoi.",
+    "label": "package_scam",
+    "risk": "high",
+    "expectedCategory": "Arnaque au colis"
+  }
+]

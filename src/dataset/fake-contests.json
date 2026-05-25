@@ -1,0 +1,8 @@
+[
+  {
+    "text": "Félicitations ! Vous avez gagné un coffret Makita. Donnez votre avis pour recevoir votre prix exclusif.",
+    "label": "fake_contest",
+    "risk": "high",
+    "expectedCategory": "Usurpation possible de marque"
+  }
+]

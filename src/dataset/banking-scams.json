@@ -1,0 +1,8 @@
+[
+  {
+    "text": "Votre compte bancaire est suspendu. Confirmez immédiatement vos identifiants pour éviter le blocage.",
+    "label": "banking_scam",
+    "risk": "high",
+    "expectedCategory": "Phishing probable"
+  }
+]
