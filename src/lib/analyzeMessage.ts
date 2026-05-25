@@ -254,13 +254,15 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       "Le lien utilise une plateforme ou un domaine courant dans les campagnes marketing."
     );
 
-    const knownMarketingDomains = [...new Set(
-  domains.filter(
-    (domain) =>
-      isKnownMarketingDomain(domain) ||
-      getDomainReputation(domain).reputation === "marketing"
-  )
-)];
+    const knownMarketingDomains = [
+      ...new Set(
+        domains.filter(
+          (domain) =>
+            isKnownMarketingDomain(domain) ||
+            getDomainReputation(domain).reputation === "marketing"
+        )
+      ),
+    ];
 
     pushUnique(
       technicalDetails,
@@ -417,17 +419,50 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   if (
     includesAny(lower, [
-      "colis", "livraison", "chronopost", "mondial relay", "la poste",
-      "point relais", "frais de livraison", "votre colis est bloqué",
+      "colis",
+      "livraison",
+      "chronopost",
+      "mondial relay",
+      "la poste",
+      "point relais",
+      "frais de livraison",
+      "votre colis est bloqué",
+      "colis bloqué",
+      "colis suspendu",
+      "livraison suspendue",
+      "récupérez votre colis",
+      "recuperez votre colis",
     ])
   ) {
-    score += 2;
-    profiles.packageScam += 4;
+    score += 3;
+    profiles.packageScam += 5;
     category = "Arnaque au colis";
 
     pushUnique(
       alerts,
       "Le message ressemble à une arnaque liée à un colis ou une livraison."
+    );
+  }
+
+  if (
+    includesAny(lower, [
+      "colis suspendu",
+      "colis bloqué",
+      "livraison suspendue",
+      "frais de livraison",
+      "charge ajustée",
+      "charge ajustee",
+      "récupérez votre colis",
+      "recuperez votre colis",
+    ])
+  ) {
+    score += 3;
+    profiles.packageScam += 3;
+    category = "Arnaque au colis";
+
+    pushUnique(
+      alerts,
+      "Le message utilise une mécanique classique d’arnaque au colis."
     );
   }
 
