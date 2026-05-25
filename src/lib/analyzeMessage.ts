@@ -36,10 +36,24 @@ const COMMON_BRANDS = [
   "commejaime", "comme j'aime", "comme j aime",
 ];
 
+const KNOWN_SMS_MARKETING_DOMAINS = [
+  "lsms.fr",
+  "isms.fr",
+];
+
+const KNOWN_MARKETING_PLATFORMS = [
+  "brevo.com",
+  "sendinblue.com",
+  "mailchimp.com",
+  "mailjet.com",
+  "mailin.fr",
+];
+
 const MARKETING_SIGNALS = [
   "offre", "offres", "promo", "promotion", "réduction", "reduction",
   "-50%", "jusqu'à", "jusqua", "offert", "offerts", "gratuit",
   "découvrez", "decouvrez", "profitez", "envie de", "stop",
+  "désinscription", "desinscription", "se désabonner", "se desabonner",
 ];
 
 const URGENCY_SIGNALS = [
@@ -85,6 +99,15 @@ function normalizeText(text: string) {
     .replace(/\s+/g, " ")
     .replace(/[’]/g, "'")
     .trim();
+}
+
+function isKnownMarketingDomain(domain: string) {
+  return (
+    KNOWN_SMS_MARKETING_DOMAINS.includes(domain) ||
+    KNOWN_MARKETING_PLATFORMS.some((knownDomain) =>
+      domain === knownDomain || domain.endsWith(`.${knownDomain}`)
+    )
+  );
 }
 
 function getDominantProfile(profiles: ThreatProfiles) {
@@ -178,6 +201,10 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     .map((url) => extractDomain(url))
     .filter((domain): domain is string => Boolean(domain));
 
+  const hasKnownMarketingDomain = domains.some((domain) =>
+    isKnownMarketingDomain(domain)
+  );
+
   const marketingCount = countMatches(lower, MARKETING_SIGNALS);
   const hasStopMention = /\bstop\s?\d{4,6}\b/i.test(text);
   const hasShortSmsNumber = /\b3\d{4}\b/.test(text);
@@ -192,6 +219,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   if (marketingCount >= 2) profiles.marketing += 3;
   if (hasStopMention) profiles.marketing += 3;
   if (hasShortSmsNumber) profiles.marketing += 1;
+  if (hasKnownMarketingDomain) profiles.marketing += 2;
 
   if (hasStopMention) {
     pushUnique(
@@ -207,8 +235,22 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     );
   }
 
+  if (hasKnownMarketingDomain) {
+    pushUnique(
+      safeSignals,
+      "Le lien utilise une plateforme ou un domaine courant dans les campagnes marketing."
+    );
+
+    pushUnique(
+      technicalDetails,
+      `Domaine marketing connu détecté : ${domains
+        .filter((domain) => isKnownMarketingDomain(domain))
+        .join(", ")}`
+    );
+  }
+
   if (hasUrgency) {
-    score += 2;
+    score += hasKnownMarketingDomain && hasStopMention ? 1 : 2;
     profiles.phishing += 1;
     profiles.financial += 1;
     pushUnique(alerts, "Le message crée un sentiment d’urgence.");
@@ -264,10 +306,13 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
     if (!domainAnalysis) continue;
 
+    const urlLower = url.toLowerCase();
+
     const isSmsRedirect =
-      url.toLowerCase().includes("lsms.fr") ||
-      url.toLowerCase().includes("sms") ||
-      url.toLowerCase().includes("lien");
+      urlLower.includes("lsms.fr") ||
+      urlLower.includes("isms.fr") ||
+      urlLower.includes("sms") ||
+      urlLower.includes("lien");
 
     const adjustedImpact =
       looksLikeMarketingSms && isSmsRedirect
@@ -281,7 +326,10 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     }
 
     domainAnalysis.alerts.forEach((alert) => {
-      if (looksLikeMarketingSms && alert.toLowerCase().includes("http")) {
+      if (
+        looksLikeMarketingSms &&
+        alert.toLowerCase().includes("http")
+      ) {
         pushUnique(
           technicalDetails,
           "Lien HTTP détecté, fréquent dans certaines plateformes SMS marketing."
@@ -421,7 +469,12 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     );
   }
 
-  if (mentionsKnownBrand && domains.length > 0 && !looksLikeMarketingSms) {
+  if (
+    mentionsKnownBrand &&
+    domains.length > 0 &&
+    !looksLikeMarketingSms &&
+    !hasKnownMarketingDomain
+  ) {
     score += 1;
     profiles.phishing += 1;
 
@@ -475,8 +528,11 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   }
 
   if (looksLikeMarketingSms && dominantProfile === "marketing") {
-    category = "SMS marketing agressif";
-    score = Math.min(score, 5);
+    category = hasKnownMarketingDomain
+      ? "SMS marketing identifié"
+      : "SMS marketing agressif";
+
+    score = Math.min(score, hasKnownMarketingDomain ? 4 : 5);
 
     pushUnique(
       alerts,
@@ -528,8 +584,9 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   let confidenceMessage = "Aucun signal majeur détecté.";
 
   if (looksLikeMarketingSms && dominantProfile === "marketing") {
-    confidenceMessage =
-      "Le message semble surtout relever d’un SMS commercial agressif.";
+    confidenceMessage = hasKnownMarketingDomain
+      ? "Le message semble provenir d’une campagne SMS marketing identifiable."
+      : "Le message semble surtout relever d’un SMS commercial agressif.";
   } else if (finalScore >= 8) {
     confidenceMessage = "Très probablement frauduleux.";
   } else if (finalScore >= 6) {
