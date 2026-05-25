@@ -5,6 +5,16 @@ type RateLimitEntry = {
   resetAt: number;
 };
 
+type LocalAnalysis = {
+  risk?: "Faible" | "Moyen" | "Élevé";
+  score?: number;
+  category?: string;
+  likelyIntent?: string;
+  confidenceLevel?: "Faible" | "Moyenne" | "Élevée";
+  safeSignals?: string[];
+  alerts?: string[];
+};
+
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 5;
 
@@ -55,6 +65,56 @@ function checkRateLimit(ip: string) {
   };
 }
 
+function sanitizeLocalAnalysis(value: any): LocalAnalysis | null {
+  if (!value || typeof value !== "object") return null;
+
+  return {
+    risk: value.risk,
+    score: typeof value.score === "number" ? value.score : undefined,
+    category: typeof value.category === "string" ? value.category : undefined,
+    likelyIntent:
+      typeof value.likelyIntent === "string" ? value.likelyIntent : undefined,
+    confidenceLevel: value.confidenceLevel,
+    safeSignals: Array.isArray(value.safeSignals)
+      ? value.safeSignals.filter((item: unknown) => typeof item === "string")
+      : [],
+    alerts: Array.isArray(value.alerts)
+      ? value.alerts.filter((item: unknown) => typeof item === "string")
+      : [],
+  };
+}
+
+function normalizeAiResult(parsed: any, localAnalysis: LocalAnalysis | null) {
+  const localRisk = localAnalysis?.risk;
+
+  const result = {
+    summary:
+      typeof parsed?.summary === "string"
+        ? parsed.summary
+        : "Analyse complémentaire effectuée.",
+    riskLevel:
+      parsed?.riskLevel === "Faible" ||
+      parsed?.riskLevel === "Moyen" ||
+      parsed?.riskLevel === "Élevé"
+        ? parsed.riskLevel
+        : localRisk || "Moyen",
+    explanation: Array.isArray(parsed?.explanation)
+      ? parsed.explanation.filter((item: unknown) => typeof item === "string")
+      : [],
+    advice:
+      typeof parsed?.advice === "string"
+        ? parsed.advice
+        : "Restez prudent et vérifiez toujours l’expéditeur.",
+  };
+
+  // Le moteur local reste la source de vérité.
+  if (localRisk) {
+    result.riskLevel = localRisk;
+  }
+
+  return result;
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {
     return res.status(405).json({
@@ -76,11 +136,6 @@ export default async function handler(req: any, res: any) {
   res.setHeader("X-RateLimit-Reset", rateLimit.resetAt.toString());
 
   if (!rateLimit.allowed) {
-    console.warn("AI rate limit reached", {
-      ip,
-      resetAt: rateLimit.resetAt,
-    });
-
     return res.status(429).json({
       error:
         "Trop d’analyses IA en peu de temps. Réessayez dans quelques instants.",
@@ -88,7 +143,8 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { text } = req.body;
+    const { text, localAnalysis } = req.body;
+    const cleanedLocalAnalysis = sanitizeLocalAnalysis(localAnalysis);
 
     if (!text || typeof text !== "string") {
       return res.status(400).json({
@@ -110,6 +166,38 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    const localContext = cleanedLocalAnalysis
+      ? `
+Analyse locale déjà effectuée par le moteur ClicSûr :
+
+- Catégorie : ${cleanedLocalAnalysis.category || "Non déterminée"}
+- Niveau de risque : ${cleanedLocalAnalysis.risk || "Non déterminé"}
+- Score : ${
+          typeof cleanedLocalAnalysis.score === "number"
+            ? `${cleanedLocalAnalysis.score}/10`
+            : "Non déterminé"
+        }
+- Objectif probable : ${cleanedLocalAnalysis.likelyIntent || "Non déterminé"}
+- Niveau de confiance : ${
+          cleanedLocalAnalysis.confidenceLevel || "Non déterminé"
+        }
+
+Alertes locales :
+${
+  cleanedLocalAnalysis.alerts?.length
+    ? cleanedLocalAnalysis.alerts.map((item) => `- ${item}`).join("\n")
+    : "- Aucune alerte locale fournie."
+}
+
+Éléments rassurants :
+${
+  cleanedLocalAnalysis.safeSignals?.length
+    ? cleanedLocalAnalysis.safeSignals.map((item) => `- ${item}`).join("\n")
+    : "- Aucun élément rassurant fourni."
+}
+`
+      : "Aucune analyse locale fournie.";
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -118,14 +206,22 @@ export default async function handler(req: any, res: any) {
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        temperature: 0.2,
+        temperature: 0.1,
         messages: [
           {
             role: "system",
             content: `
-Tu es un assistant spécialisé dans la détection d’arnaques numériques.
+Tu es l’assistant explicatif de ClicSûr, un outil de détection d’arnaques numériques.
 
-Analyse le message fourni par l’utilisateur.
+Règle principale :
+Le moteur local ClicSûr est la source de vérité pour la catégorie, le score et le niveau de risque.
+
+Ton rôle :
+- expliquer l’analyse locale avec des mots simples ;
+- compléter l’analyse sans la contredire ;
+- nuancer si le message ressemble plutôt à du marketing agressif ;
+- éviter les formulations alarmistes si le moteur local classe le message en "SMS marketing agressif" ou en risque "Moyen" ;
+- ne jamais reclasser en "Élevé" si l’analyse locale indique "Moyen" ou "Faible", sauf si le texte contient clairement une demande de mot de passe, carte bancaire, virement, code de sécurité ou paiement.
 
 Réponds uniquement en JSON valide avec ce format :
 
@@ -144,7 +240,12 @@ Ne rajoute aucun texte hors JSON.
           },
           {
             role: "user",
-            content: text,
+            content: `
+${localContext}
+
+Message à analyser :
+${text}
+`,
           },
         ],
       }),
@@ -168,14 +269,19 @@ Ne rajoute aucun texte hors JSON.
       parsed = JSON.parse(content);
     } catch {
       parsed = {
-        summary: "Impossible d’analyser la réponse IA.",
-        riskLevel: "Moyen",
-        explanation: ["Réponse IA invalide."],
-        advice: "Réessayez plus tard.",
+        summary: "Impossible d’analyser correctement la réponse IA.",
+        riskLevel: cleanedLocalAnalysis?.risk || "Moyen",
+        explanation: [
+          "La réponse IA n’était pas dans un format exploitable.",
+        ],
+        advice:
+          "Basez-vous sur l’analyse locale et vérifiez l’expéditeur avant de cliquer.",
       };
     }
 
-    return res.status(200).json(parsed);
+    const normalized = normalizeAiResult(parsed, cleanedLocalAnalysis);
+
+    return res.status(200).json(normalized);
   } catch (error: any) {
     return res.status(500).json({
       error: "Erreur serveur",

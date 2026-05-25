@@ -200,8 +200,17 @@ export default function App() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            text: textToAnalyze,
-          }),
+          text: textToAnalyze,
+          localAnalysis: {
+            risk: analysis.risk,
+            score: analysis.score,
+            category: analysis.category,
+            likelyIntent: analysis.likelyIntent,
+            confidenceLevel: analysis.confidenceLevel,
+            safeSignals: analysis.safeSignals,
+            alerts: analysis.alerts,
+          },
+        }),
         });
 
         const data = await response.json();
