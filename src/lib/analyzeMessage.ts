@@ -228,11 +228,29 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     lower.includes(brand)
   );
 
-  if (marketingCount >= 2) profiles.marketing += 3;
-  if (hasStopMention) profiles.marketing += 3;
-  if (hasShortSmsNumber) profiles.marketing += 1;
-  if (hasKnownMarketingDomain) profiles.marketing += 2;
-  if (hasMarketingReputation) profiles.marketing += 3;
+    if (marketingCount >= 2) {
+      profiles.marketing += 3;
+      score += 3;
+    }
+
+    if (hasStopMention) {
+      profiles.marketing += 3;
+      score += 1;
+    }
+
+    if (hasShortSmsNumber) {
+      profiles.marketing += 1;
+    }
+
+    if (hasKnownMarketingDomain) {
+      profiles.marketing += 2;
+      score += 1;
+    }
+
+    if (hasMarketingReputation) {
+      profiles.marketing += 3;
+      score += 1;
+    }
 
   if (hasStopMention) {
     pushUnique(
