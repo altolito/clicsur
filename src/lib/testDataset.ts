@@ -4,6 +4,8 @@ import packageScams from "../dataset/package-scams.json";
 import marketingSms from "../dataset/marketing-sms.json";
 import fakeContests from "../dataset/fake-contests.json";
 import bankingScams from "../dataset/banking-scams.json";
+import governmentScams from "../dataset/government-scams.json";
+import subscriptionScams from "../dataset/subscription-scams.json";
 import safeMessages from "../dataset/safe-messages.json";
 
 type DatasetItem = {
@@ -11,6 +13,7 @@ type DatasetItem = {
   label: string;
   risk: "low" | "medium" | "high";
   expectedCategory: string;
+  tags?: string[];
 };
 
 const datasets = {
@@ -18,6 +21,8 @@ const datasets = {
   "marketing-sms": marketingSms,
   "fake-contests": fakeContests,
   "banking-scams": bankingScams,
+  "government-scams": governmentScams,
+  "subscription-scams": subscriptionScams,
   "safe-messages": safeMessages,
 };
 
@@ -51,6 +56,7 @@ export async function testDataset() {
         actualRisk: analysis.risk,
         riskOk,
         score: analysis.score,
+        tags: item.tags ?? [],
         text: item.text,
       });
     }

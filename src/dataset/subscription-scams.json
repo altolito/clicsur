@@ -1,0 +1,9 @@
+[
+    {
+  "text": "Votre abonnement Netflix est suspendu. Merci de mettre à jour votre moyen de paiement : https://netflix-paiement-client.com",
+  "label": "subscription_scam",
+  "risk": "high",
+  "expectedCategory": "Arnaque abonnement",
+  "tags": ["abonnement", "paiement", "marque connue", "lien suspect"]
+    }
+]

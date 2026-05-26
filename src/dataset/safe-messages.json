@@ -1,8 +1,39 @@
 [
   {
     "text": "Votre rendez-vous médical est confirmé demain à 14h30.",
-    "label": "safe_message",
+    "label": "safe",
     "risk": "low",
-    "expectedCategory": "Analyse générale"
+    "expectedCategory": "Message légitime"
+  },
+   {
+    "text": "Votre commande Amazon a été expédiée. Suivez votre colis depuis votre espace client officiel Amazon.",
+    "label": "safe",
+    "risk": "low",
+    "expectedCategory": "Message légitime"
+  },
+  {
+    "text": "Rappel : votre rendez-vous chez le dentiste est prévu mardi à 14h30.",
+    "label": "safe",
+    "risk": "low",
+    "expectedCategory": "Message légitime"
+  },
+  {
+    "text": "Bonjour Bertrand, votre facture EDF est disponible dans votre espace client.",
+    "label": "safe",
+    "risk": "low",
+    "expectedCategory": "Message légitime"
+  },
+  {
+    "text": "Merci pour votre achat. Votre paiement a bien été confirmé.",
+    "label": "safe",
+    "risk": "low",
+    "expectedCategory": "Message légitime"
+  },
+  {
+    "text": "Votre colis Mondial Relay est disponible au point relais habituel.",
+    "label": "safe",
+    "risk": "low",
+    "expectedCategory": "Message légitime"
   }
 ]
+

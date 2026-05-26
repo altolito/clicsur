@@ -10,5 +10,12 @@
     "label": "package_scam",
     "risk": "high",
     "expectedCategory": "Arnaque au colis"
-  }
+  },
+{
+  "text": "Votre colis est en attente. Des frais de livraison de 1,99€ sont nécessaires : https://suivi-colis-fr.com",
+  "label": "package_scam",
+  "risk": "high",
+  "expectedCategory": "Arnaque au colis",
+  "tags": ["colis", "paiement", "petit montant", "lien suspect"]
+}
 ]

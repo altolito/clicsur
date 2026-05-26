@@ -4,5 +4,11 @@
     "label": "banking_scam",
     "risk": "high",
     "expectedCategory": "Phishing probable"
-  }
-]
+  },
+{
+  "text": "Alerte sécurité : une connexion inhabituelle a été détectée. Vérifiez votre compte immédiatement : https://secure-verif-compte.com",
+  "label": "banking_scam",
+  "risk": "high",
+  "expectedCategory": "Arnaque bancaire",
+  "tags": ["banque", "urgence", "sécurité", "lien suspect"]
+}]

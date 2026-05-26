@@ -1,0 +1,16 @@
+[
+ {
+  "text": "Votre carte Vitale arrive à expiration. Mettez à jour vos informations sous 24h : https://ameli-renouvellement.info",
+  "label": "government_scam",
+  "risk": "high",
+  "expectedCategory": "Arnaque administrative",
+  "tags": ["ameli", "identité", "urgence", "faux service public"]
+},
+{
+  "text": "Votre solde CPF expire bientôt. Connectez-vous pour conserver vos droits : https://moncompteformation-droits.com",
+  "label": "government_scam",
+  "risk": "high",
+  "expectedCategory": "Arnaque administrative",
+  "tags": ["cpf", "urgence", "droits", "lien suspect"]
+}
+]
