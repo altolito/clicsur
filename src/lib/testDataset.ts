@@ -7,6 +7,7 @@ import bankingScams from "../dataset/banking-scams.json";
 import governmentScams from "../dataset/government-scams.json";
 import subscriptionScams from "../dataset/subscription-scams.json";
 import safeMessages from "../dataset/safe-messages.json";
+import advancedScams from "../dataset/advanced-scams.json";
 
 type DatasetItem = {
   text: string;
@@ -23,6 +24,7 @@ const datasets = {
   "banking-scams": bankingScams,
   "government-scams": governmentScams,
   "subscription-scams": subscriptionScams,
+  "advanced-scams": advancedScams,
   "safe-messages": safeMessages,
 };
 

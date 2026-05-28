@@ -1,0 +1,37 @@
+[
+  {
+    "text": "WhatsApp : votre code de vérification est 493882. Ne le partagez avec personne. https://wa-security-check.com",
+    "label": "fake_otp",
+    "risk": "high",
+    "expectedCategory": "Phishing probable",
+    "tags": ["otp", "whatsapp", "lien suspect"]
+  },
+  {
+    "text": "Microsoft : activité inhabituelle détectée sur votre compte. Code : 884221. Vérifiez immédiatement votre identité : https://microsoft-security-login.com",
+    "label": "fake_microsoft_security",
+    "risk": "high",
+    "expectedCategory": "Phishing probable",
+    "tags": ["microsoft", "urgence", "otp", "phishing"]
+  },
+  {
+    "text": "Bonjour, votre colis Mondial Relay est arrivé. Veuillez choisir un nouveau créneau de livraison : https://mondial-relay-suivi-france.com",
+    "label": "advanced_package_scam",
+    "risk": "high",
+    "expectedCategory": "Arnaque au colis",
+    "tags": ["colis", "mondial relay", "lien suspect"]
+  },
+  {
+    "text": "Bonjour Bertrand, nous n'avons pas pu valider votre dernier paiement Netflix. Merci de mettre à jour votre carte avant suspension : https://netflix-client-verification.com",
+    "label": "subscription_phishing",
+    "risk": "high",
+    "expectedCategory": "Tentative financière suspecte",
+    "tags": ["netflix", "paiement", "abonnement"]
+  },
+  {
+    "text": "Bonjour, votre conseiller bancaire tente de vous joindre concernant une opération suspecte. Merci de rappeler rapidement le 07 81 44 22 91.",
+    "label": "callback_scam",
+    "risk": "medium",
+    "expectedCategory": "Fausse alerte bancaire",
+    "tags": ["banque", "rappel", "social engineering"]
+  }
+]

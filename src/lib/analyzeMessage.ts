@@ -27,14 +27,15 @@ type ThreatProfiles = {
   bankingScam: number;
   familyScam: number;
   techSupport: number;
+  otp: number;
 };
 
 const COMMON_BRANDS = [
   "ameli", "caf", "impots", "impôts", "chronopost", "mondial relay",
   "la poste", "netflix", "paypal", "amazon", "apple", "microsoft",
-  "google", "banque", "cpam", "cpf", "makita", "bosch", "dewalt",
-  "leroy merlin", "castorama", "brico dépôt", "brico depot",
-  "commejaime", "comme j'aime", "comme j aime",
+  "google", "facebook", "meta", "banque", "cpam", "cpf", "makita",
+  "bosch", "dewalt", "leroy merlin", "castorama", "brico dépôt",
+  "brico depot", "commejaime", "comme j'aime", "comme j aime",
 ];
 
 const KNOWN_SMS_MARKETING_DOMAINS = ["lsms.fr", "isms.fr"];
@@ -68,8 +69,23 @@ const FINANCIAL_SIGNALS = [
 
 const IDENTITY_SIGNALS = [
   "mot de passe", "code bancaire", "code de sécurité", "code confidentiel",
-  "identifiants", "connexion", "confirmez votre compte",
-  "vérifiez votre compte", "authentification",
+  "identifiants", "confirmez votre compte", "vérifiez votre compte",
+];
+
+const OTP_SIGNALS = [
+  "code",
+  "verification code",
+  "code de vérification",
+  "code verification",
+  "security code",
+  "code de sécurité",
+  "code d'authentification",
+  "authentification",
+  "connexion",
+  "login",
+  "otp",
+  "facebook code",
+  "is your facebook code",
 ];
 
 const FAKE_CONTEST_SIGNALS = [
@@ -118,6 +134,8 @@ function getDominantProfile(profiles: ThreatProfiles) {
 
 function getLikelyIntent(profile: keyof ThreatProfiles) {
   switch (profile) {
+    case "otp":
+      return "Code de connexion ou d’authentification";
     case "marketing":
       return "Publicité ou campagne marketing";
     case "phishing":
@@ -172,6 +190,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     bankingScam: 0,
     familyScam: 0,
     techSupport: 0,
+    otp: 0,
   };
 
   if (!lower) {
@@ -195,7 +214,6 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9-]+\.[a-z]{2,}(\/[^\s]*)?)/gi;
 
   const urls = text.match(urlRegex) || [];
-
   const domains = urls
     .map((url) => extractDomain(url))
     .filter((domain): domain is string => Boolean(domain));
@@ -218,6 +236,11 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     hasMarketingReputation;
 
   const marketingCount = countMatches(lower, MARKETING_SIGNALS);
+  const otpCount = countMatches(lower, OTP_SIGNALS);
+  const hasOtpPattern =
+    /\b\d{4,8}\b/.test(text) &&
+    (otpCount >= 1 || lower.includes("facebook") || lower.includes("code"));
+
   const hasStopMention = /\bstop\s?\d{4,6}\b/i.test(text);
   const hasShortSmsNumber = /\b3\d{4}\b/.test(text);
   const hasSensitiveKeywords = includesAny(lower, IDENTITY_SIGNALS);
@@ -228,29 +251,70 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     lower.includes(brand)
   );
 
-    if (marketingCount >= 2) {
-      profiles.marketing += 3;
-      score += 3;
-    }
+  if (
+    hasOtpPattern &&
+    urls.length === 0 &&
+    !hasFinancialKeywords &&
+    !hasFakeContestSignal &&
+    !hasUrgency
+  ) {
+    return {
+      risk: "Faible",
+      color: "emerald",
+      score: 1,
+      alerts: [
+        "Code de connexion ou d’authentification détecté.",
+      ],
+      safeSignals: [
+        "Aucun lien détecté.",
+        "Aucune demande de paiement détectée.",
+        "Aucune demande d’identifiants ou de mot de passe détectée.",
+      ],
+      recommendation:
+        "Ne partagez jamais ce code. Si vous n’êtes pas à l’origine de cette demande, sécurisez votre compte depuis l’application ou le site officiel.",
+      technicalDetails: [
+        "Format compatible avec un code OTP ou MFA.",
+      ],
+      category: "Code de connexion",
+      confidenceMessage:
+        "Le message ressemble à un code de vérification légitime, mais il ne doit jamais être transmis à quelqu’un.",
+      likelyIntent: "Code de connexion ou d’authentification",
+      confidenceLevel: "Moyenne",
+    };
+  }
 
-    if (hasStopMention) {
-      profiles.marketing += 3;
-      score += 1;
-    }
+  if (marketingCount >= 2) {
+    profiles.marketing += 3;
+    score += 3;
+  }
 
-    if (hasShortSmsNumber) {
-      profiles.marketing += 1;
-    }
+  if (hasStopMention) {
+    profiles.marketing += 3;
+    score += 1;
+  }
 
-    if (hasKnownMarketingDomain) {
-      profiles.marketing += 2;
-      score += 1;
-    }
+  if (hasShortSmsNumber) {
+    profiles.marketing += 1;
+  }
 
-    if (hasMarketingReputation) {
-      profiles.marketing += 3;
-      score += 1;
-    }
+  if (hasKnownMarketingDomain) {
+    profiles.marketing += 2;
+    score += 1;
+  }
+
+  if (hasMarketingReputation) {
+    profiles.marketing += 3;
+    score += 1;
+  }
+
+  if (hasOtpPattern) {
+    profiles.otp += 4;
+    pushUnique(alerts, "Code de connexion ou d’authentification détecté.");
+    pushUnique(
+      safeSignals,
+      "Un code seul n’est pas forcément suspect, mais il ne doit jamais être partagé."
+    );
+  }
 
   if (hasStopMention) {
     pushUnique(
@@ -289,19 +353,19 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   }
 
   if (
-  hasMarketingReputation &&
-  !hasSensitiveKeywords &&
-  !hasFinancialKeywords
-) {
-  score = Math.max(score, 3);
+    hasMarketingReputation &&
+    !hasSensitiveKeywords &&
+    !hasFinancialKeywords
+  ) {
+    score = Math.max(score, 3);
 
-  pushUnique(
-    safeSignals,
-    "Le domaine possède une réputation marketing connue."
-  );
+    pushUnique(
+      safeSignals,
+      "Le domaine possède une réputation marketing connue."
+    );
 
-  pushUnique(technicalDetails, "Réputation domaine : marketing connu.");
-}
+    pushUnique(technicalDetails, "Réputation domaine : marketing connu.");
+  }
 
   if (hasDangerousReputation) {
     score += 5;
@@ -618,7 +682,8 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   }
 
   const [dominantProfile, dominantScore] = getDominantProfile(profiles);
-  const likelyIntent = getLikelyIntent(dominantProfile);
+  const likelyIntent =
+    dominantScore > 0 ? getLikelyIntent(dominantProfile) : "Indéterminé";
 
   if (dominantScore > 0) {
     pushUnique(
@@ -627,7 +692,15 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     );
   }
 
-  if (looksLikeMarketingSms && dominantProfile === "marketing") {
+  if (dominantProfile === "otp" && dominantScore >= 4) {
+    category = "Code de connexion";
+    score = Math.min(score, 2);
+
+    pushUnique(
+      safeSignals,
+      "Le message ressemble à un code de vérification ou de connexion."
+    );
+  } else if (looksLikeMarketingSms && dominantProfile === "marketing") {
     category = hasKnownMarketingDomain
       ? "SMS marketing identifié"
       : "SMS marketing agressif";
@@ -683,7 +756,10 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   let confidenceMessage = "Aucun signal majeur détecté.";
 
-  if (looksLikeMarketingSms && dominantProfile === "marketing") {
+  if (dominantProfile === "otp" && dominantScore >= 4) {
+    confidenceMessage =
+      "Le message ressemble à un code de connexion ou d’authentification.";
+  } else if (looksLikeMarketingSms && dominantProfile === "marketing") {
     confidenceMessage = hasKnownMarketingDomain
       ? "Le message semble provenir d’une campagne SMS marketing identifiable."
       : "Le message semble surtout relever d’un SMS commercial agressif.";
@@ -707,7 +783,9 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       alerts: alerts.length ? alerts : ["Aucun signal critique détecté."],
       safeSignals,
       recommendation:
-        "Le contenu semble relativement sûr, mais restez vigilant.",
+        category === "Code de connexion"
+          ? "Ne partagez jamais ce code. Si vous n’êtes pas à l’origine de cette demande, changez votre mot de passe depuis le site officiel."
+          : "Le contenu semble relativement sûr, mais restez vigilant.",
       technicalDetails,
       category,
       confidenceMessage,
@@ -741,7 +819,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     alerts,
     safeSignals,
     recommendation:
-      "Ne cliquez pas. Vérifiez l’information depuis le site officiel ou un canal connu.",
+      "Ne cliquez pas. Vérifiez l'information depuis le site officiel ou un canal connu.",
     technicalDetails,
     category,
     confidenceMessage,
