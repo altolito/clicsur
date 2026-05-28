@@ -28,20 +28,6 @@ const URL_SHORTENERS = [
   "shorturl.at",
 ];
 
-const TRUSTED_BRANDS = [
-  "paypal",
-  "netflix",
-  "amazon",
-  "ameli",
-  "caf",
-  "impots",
-  "laposte",
-  "chronopost",
-  "microsoft",
-  "google",
-  "apple",
-];
-
 const TYPO_PATTERNS = [
   ["paypa1", "paypal"],
   ["paypai", "paypal"],
@@ -52,6 +38,41 @@ const TYPO_PATTERNS = [
   ["app1e", "apple"],
   ["amel1", "ameli"],
 ];
+
+const TRUSTED_BRAND_DOMAINS = {
+  microsoft: ["microsoft.com", "live.com"],
+  google: ["google.com", "gmail.com"],
+  netflix: ["netflix.com"],
+  paypal: ["paypal.com"],
+  amazon: ["amazon.fr", "amazon.com"],
+  ameli: ["ameli.fr"],
+  facebook: ["facebook.com", "fb.com"],
+  whatsapp: ["whatsapp.com"],
+  mondialrelay: ["mondialrelay.fr"],
+  chronopost: ["chronopost.fr"],
+};
+
+function detectBrandImpersonation(domain: string) {
+  const normalizedDomain = domain.toLowerCase();
+
+  for (const [brand, officialDomains] of Object.entries(TRUSTED_BRAND_DOMAINS)) {
+    const mentionsBrand = normalizedDomain.includes(brand);
+    const isOfficialDomain = officialDomains.some(
+      (officialDomain) =>
+        normalizedDomain === officialDomain ||
+        normalizedDomain.endsWith(`.${officialDomain}`)
+    );
+
+    if (mentionsBrand && !isOfficialDomain) {
+      return {
+        brand,
+        officialDomains,
+      };
+    }
+  }
+
+  return null;
+}
 
 export function extractDomain(rawUrl: string): string | null {
   try {
@@ -134,23 +155,23 @@ export function analyzeDomain(rawUrl: string): DomainAnalysis | null {
     technicalDetails.push("Raccourcisseur d’URL : oui");
   }
 
-  TRUSTED_BRANDS.forEach((brand) => {
-    if (
-      domain.includes(brand) &&
-      !domain.endsWith(`${brand}.com`) &&
-      !domain.endsWith(`${brand}.fr`)
-    ) {
-      scoreImpact += 3;
+  const impersonation = detectBrandImpersonation(domain);
 
-      alerts.push(
-        `Le domaine semble imiter la marque "${brand}".`
-      );
+if (impersonation) {
+  scoreImpact += 4;
 
-      technicalDetails.push(
-        `Possible usurpation de marque détectée : ${brand}`
-      );
-    }
-  });
+  alerts.push(
+    `Le domaine semble imiter la marque "${impersonation.brand}".`
+  );
+
+  technicalDetails.push(
+    `Possible usurpation de marque détectée : ${impersonation.brand}`
+  );
+
+  technicalDetails.push(
+    `Domaines officiels connus : ${impersonation.officialDomains.join(", ")}`
+  );
+}
 
   TYPO_PATTERNS.forEach(([fake, brand]) => {
     if (domain.includes(fake)) {
