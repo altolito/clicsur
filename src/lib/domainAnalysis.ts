@@ -147,7 +147,13 @@ export function analyzeDomain(rawUrl: string): DomainAnalysis | null {
     technicalDetails.push("Extension à surveiller : oui");
   }
 
-  if (URL_SHORTENERS.some((shortener) => domain.includes(shortener))) {
+  if (
+  URL_SHORTENERS.some(
+    (shortener) =>
+      domain === shortener ||
+      domain.endsWith(`.${shortener}`)
+  )
+) {
     scoreImpact += 3;
 
     alerts.push("Le lien utilise probablement un raccourcisseur d’URL.");
