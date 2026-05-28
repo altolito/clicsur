@@ -214,6 +214,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9-]+\.[a-z]{2,}(\/[^\s]*)?)/gi;
 
   const urls = text.match(urlRegex) || [];
+
   const domains = urls
     .map((url) => extractDomain(url))
     .filter((domain): domain is string => Boolean(domain));
@@ -237,6 +238,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   const marketingCount = countMatches(lower, MARKETING_SIGNALS);
   const otpCount = countMatches(lower, OTP_SIGNALS);
+
   const hasOtpPattern =
     /\b\d{4,8}\b/.test(text) &&
     (otpCount >= 1 || lower.includes("facebook") || lower.includes("code"));
@@ -247,6 +249,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   const hasFinancialKeywords = includesAny(lower, FINANCIAL_SIGNALS);
   const hasUrgency = includesAny(lower, URGENCY_SIGNALS);
   const hasFakeContestSignal = includesAny(lower, FAKE_CONTEST_SIGNALS);
+
   const mentionsKnownBrand = COMMON_BRANDS.some((brand) =>
     lower.includes(brand)
   );
@@ -262,9 +265,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       risk: "Faible",
       color: "emerald",
       score: 1,
-      alerts: [
-        "Code de connexion ou d’authentification détecté.",
-      ],
+      alerts: ["Code de connexion ou d’authentification détecté."],
       safeSignals: [
         "Aucun lien détecté.",
         "Aucune demande de paiement détectée.",
@@ -272,9 +273,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       ],
       recommendation:
         "Ne partagez jamais ce code. Si vous n’êtes pas à l’origine de cette demande, sécurisez votre compte depuis l’application ou le site officiel.",
-      technicalDetails: [
-        "Format compatible avec un code OTP ou MFA.",
-      ],
+      technicalDetails: ["Format compatible avec un code OTP ou MFA."],
       category: "Code de connexion",
       confidenceMessage:
         "Le message ressemble à un code de vérification légitime, mais il ne doit jamais être transmis à quelqu’un.",
@@ -309,6 +308,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   if (hasOtpPattern) {
     profiles.otp += 4;
+
     pushUnique(alerts, "Code de connexion ou d’authentification détecté.");
     pushUnique(
       safeSignals,
@@ -372,11 +372,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     profiles.phishing += 5;
     category = "Domaine dangereux connu";
 
-    pushUnique(
-      alerts,
-      "Le domaine est connu comme dangereux ou frauduleux."
-    );
-
+    pushUnique(alerts, "Le domaine est connu comme dangereux ou frauduleux.");
     pushUnique(technicalDetails, "Réputation domaine : dangereux connu.");
   }
 
@@ -384,6 +380,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     score += hasKnownMarketingDomain && hasStopMention ? 1 : 2;
     profiles.phishing += 1;
     profiles.financial += 1;
+
     pushUnique(alerts, "Le message crée un sentiment d’urgence.");
   }
 
@@ -421,10 +418,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   }
 
   if (looksLikeMarketingSms && !hasFinancialKeywords) {
-    pushUnique(
-      safeSignals,
-      "Aucune demande directe de paiement détectée."
-    );
+    pushUnique(safeSignals, "Aucune demande directe de paiement détectée.");
   }
 
   if (urls.length > 0) {
@@ -493,9 +487,24 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     }
   }
 
+  const hasOfficialTrustedDomain = technicalDetails.some((detail) =>
+    detail.includes("domaine officiel connu")
+  );
+
+  if (hasOfficialTrustedDomain && score <= 3 && !hasDangerousReputation) {
+    score = Math.max(0, score - 2);
+    category = "Lien officiel probable";
+
+    pushUnique(
+      safeSignals,
+      "Le lien correspond à un domaine officiel connu."
+    );
+  }
+
   if (urls.some((url) => url.length > 80)) {
     score += looksLikeMarketingSms ? 1 : 2;
     profiles.phishing += looksLikeMarketingSms ? 0 : 1;
+
     pushUnique(alerts, "L’URL semble anormalement longue.");
   }
 
@@ -550,8 +559,17 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   if (
     includesAny(lower, [
-      "amende", "antai", "impôts", "impots", "ameli", "assurance maladie",
-      "carte vitale", "caf", "cpf", "gouv", "service public",
+      "amende",
+      "antai",
+      "impôts",
+      "impots",
+      "ameli",
+      "assurance maladie",
+      "carte vitale",
+      "caf",
+      "cpf",
+      "gouv",
+      "service public",
     ])
   ) {
     score += 2;
@@ -566,8 +584,13 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   if (
     includesAny(lower, [
-      "banque", "compte bancaire", "opposition", "sécuriser votre compte",
-      "activité suspecte", "paiement refusé", "nouveau bénéficiaire",
+      "banque",
+      "compte bancaire",
+      "opposition",
+      "sécuriser votre compte",
+      "activité suspecte",
+      "paiement refusé",
+      "nouveau bénéficiaire",
     ])
   ) {
     score += 3;
@@ -650,8 +673,13 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   if (
     includesAny(lower, [
-      "maman", "papa", "j’ai changé de numéro", "j'ai changé de numéro",
-      "nouveau numéro", "virement rapidement", "je suis bloqué",
+      "maman",
+      "papa",
+      "j’ai changé de numéro",
+      "j'ai changé de numéro",
+      "nouveau numéro",
+      "virement rapidement",
+      "je suis bloqué",
       "je ne peux pas appeler",
     ])
   ) {
@@ -667,8 +695,13 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   if (
     includesAny(lower, [
-      "support microsoft", "ordinateur infecté", "virus détecté",
-      "votre pc est bloqué", "assistance technique", "teamviewer", "anydesk",
+      "support microsoft",
+      "ordinateur infecté",
+      "virus détecté",
+      "votre pc est bloqué",
+      "assistance technique",
+      "teamviewer",
+      "anydesk",
     ])
   ) {
     score += 3;
@@ -682,6 +715,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   }
 
   const [dominantProfile, dominantScore] = getDominantProfile(profiles);
+
   const likelyIntent =
     dominantScore > 0 ? getLikelyIntent(dominantProfile) : "Indéterminé";
 
@@ -692,7 +726,9 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     );
   }
 
-  if (dominantProfile === "otp" && dominantScore >= 4) {
+  if (category === "Lien officiel probable") {
+    // On garde cette catégorie prioritaire.
+  } else if (dominantProfile === "otp" && dominantScore >= 4) {
     category = "Code de connexion";
     score = Math.min(score, 2);
 
@@ -756,7 +792,10 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 
   let confidenceMessage = "Aucun signal majeur détecté.";
 
-  if (dominantProfile === "otp" && dominantScore >= 4) {
+  if (category === "Lien officiel probable") {
+    confidenceMessage =
+      "Le lien semble appartenir à un domaine officiel connu.";
+  } else if (dominantProfile === "otp" && dominantScore >= 4) {
     confidenceMessage =
       "Le message ressemble à un code de connexion ou d’authentification.";
   } else if (looksLikeMarketingSms && dominantProfile === "marketing") {
@@ -785,7 +824,9 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       recommendation:
         category === "Code de connexion"
           ? "Ne partagez jamais ce code. Si vous n’êtes pas à l’origine de cette demande, changez votre mot de passe depuis le site officiel."
-          : "Le contenu semble relativement sûr, mais restez vigilant.",
+          : category === "Lien officiel probable"
+            ? "Le lien semble correspondre à un domaine officiel connu. Vérifiez tout de même que vous êtes bien à l’origine de l’action."
+            : "Le contenu semble relativement sûr, mais restez vigilant.",
       technicalDetails,
       category,
       confidenceMessage,
