@@ -52,6 +52,15 @@ const TRUSTED_BRAND_DOMAINS = {
   chronopost: ["chronopost.fr"],
 };
 
+function isOfficialTrustedDomain(domain: string) {
+  return Object.values(TRUSTED_BRAND_DOMAINS)
+    .flat()
+    .some(
+      (officialDomain) =>
+        domain === officialDomain || domain.endsWith(`.${officialDomain}`)
+    );
+}
+
 function detectBrandImpersonation(domain: string) {
   const normalizedDomain = domain.toLowerCase();
 
@@ -101,6 +110,8 @@ export function analyzeDomain(rawUrl: string): DomainAnalysis | null {
   const alerts: string[] = [];
   const technicalDetails: string[] = [`Domaine détecté : ${domain}`];
 
+  const isTrustedOfficialDomain = isOfficialTrustedDomain(domain);
+
   if (rawUrl.startsWith("http://")) {
     scoreImpact += 2;
 
@@ -148,12 +159,10 @@ export function analyzeDomain(rawUrl: string): DomainAnalysis | null {
   }
 
   if (
-  URL_SHORTENERS.some(
-    (shortener) =>
-      domain === shortener ||
-      domain.endsWith(`.${shortener}`)
-  )
-) {
+    URL_SHORTENERS.some(
+      (shortener) => domain === shortener || domain.endsWith(`.${shortener}`)
+    )
+  ) {
     scoreImpact += 3;
 
     alerts.push("Le lien utilise probablement un raccourcisseur d’URL.");
@@ -163,35 +172,45 @@ export function analyzeDomain(rawUrl: string): DomainAnalysis | null {
 
   const impersonation = detectBrandImpersonation(domain);
 
-if (impersonation) {
-  scoreImpact += 4;
+  if (impersonation) {
+    scoreImpact += 4;
 
-  alerts.push(
-    `Le domaine semble imiter la marque "${impersonation.brand}".`
-  );
+    alerts.push(
+      `Le domaine semble imiter la marque "${impersonation.brand}".`
+    );
 
-  technicalDetails.push(
-    `Possible usurpation de marque détectée : ${impersonation.brand}`
-  );
+    technicalDetails.push(
+      `Possible usurpation de marque détectée : ${impersonation.brand}`
+    );
 
-  technicalDetails.push(
-    `Domaines officiels connus : ${impersonation.officialDomains.join(", ")}`
-  );
-}
+    technicalDetails.push(
+      `Domaines officiels connus : ${impersonation.officialDomains.join(", ")}`
+    );
+  }
 
   TYPO_PATTERNS.forEach(([fake, brand]) => {
     if (domain.includes(fake)) {
       scoreImpact += 4;
 
-      alerts.push(
-        `Le domaine semble utiliser une imitation de "${brand}".`
-      );
+      alerts.push(`Le domaine semble utiliser une imitation de "${brand}".`);
 
       technicalDetails.push(
         `Possible typo-squatting détecté : ${fake} → ${brand}`
       );
     }
   });
+
+  if (isTrustedOfficialDomain && scoreImpact > 0) {
+    scoreImpact = Math.max(0, scoreImpact - 2);
+
+    technicalDetails.push(
+      "Le domaine correspond à un domaine officiel connu."
+    );
+  } else if (isTrustedOfficialDomain) {
+    technicalDetails.push(
+      "Le domaine correspond à un domaine officiel connu."
+    );
+  }
 
   return {
     domain,
