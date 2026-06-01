@@ -1,6 +1,7 @@
 import { analyzeDomain, extractDomain } from "./domainAnalysis";
 import { checkSafeBrowsing } from "./checkSafeBrowsing";
 import { getDomainReputation } from "./domainReputation";
+import { supabase } from "./supabase";
 
 export type AnalysisResult = {
   risk: "Faible" | "Moyen" | "Élevé";
@@ -169,6 +170,31 @@ function getConfidenceLevel(
   return "Faible";
 }
 
+
+async function saveAnalysis(
+  inputText: string,
+  result: AnalysisResult,
+  urls: string[] = [],
+  domains: string[] = []
+) {
+  try {
+    const { error } = await supabase.from("analyses").insert({
+      input_text: inputText,
+      risk: result.risk,
+      score: result.score,
+      category: result.category,
+      urls,
+      domains,
+    });
+
+    if (error) {
+      console.error("Erreur sauvegarde Supabase :", error);
+    }
+  } catch (error) {
+    console.error("Erreur Supabase inattendue :", error);
+  }
+}
+
 export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   const lower = normalizeText(text);
 
@@ -261,7 +287,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     !hasFakeContestSignal &&
     !hasUrgency
   ) {
-    return {
+    const result: AnalysisResult = {
       risk: "Faible",
       color: "emerald",
       score: 1,
@@ -280,6 +306,10 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       likelyIntent: "Code de connexion ou d’authentification",
       confidenceLevel: "Moyenne",
     };
+
+    await saveAnalysis(text, result, urls, domains);
+
+    return result;
   }
 
   if (marketingCount >= 2) {
@@ -814,8 +844,10 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     confidenceMessage = "Quelques éléments méritent de la prudence.";
   }
 
+  let result: AnalysisResult;
+
   if (finalScore <= 2) {
-    return {
+    result = {
       risk: "Faible",
       color: "emerald",
       score: finalScore,
@@ -833,10 +865,8 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       likelyIntent,
       confidenceLevel,
     };
-  }
-
-  if (finalScore <= 5) {
-    return {
+  } else if (finalScore <= 5) {
+    result = {
       risk: "Moyen",
       color: "yellow",
       score: finalScore,
@@ -851,20 +881,24 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       likelyIntent,
       confidenceLevel,
     };
+  } else {
+    result = {
+      risk: "Élevé",
+      color: "red",
+      score: finalScore,
+      alerts,
+      safeSignals,
+      recommendation:
+        "Ne cliquez pas. Vérifiez l'information depuis le site officiel ou un canal connu.",
+      technicalDetails,
+      category,
+      confidenceMessage,
+      likelyIntent,
+      confidenceLevel,
+    };
   }
 
-  return {
-    risk: "Élevé",
-    color: "red",
-    score: finalScore,
-    alerts,
-    safeSignals,
-    recommendation:
-      "Ne cliquez pas. Vérifiez l'information depuis le site officiel ou un canal connu.",
-    technicalDetails,
-    category,
-    confidenceMessage,
-    likelyIntent,
-    confidenceLevel,
-  };
+  await saveAnalysis(text, result, urls, domains);
+
+  return result;
 }
