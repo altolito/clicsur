@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import Tesseract from "tesseract.js";
 import { analyzeMessage, type AnalysisResult } from "./lib/analyzeMessage";
+import { supabase } from "./lib/supabase";
 
-type HistoryItem = {
+type DbHistoryItem = {
   id: string;
-  text: string;
+  created_at: string;
+  input_text: string;
   risk: AnalysisResult["risk"];
-  color: AnalysisResult["color"];
   score: number;
-  category: string;
-  createdAt: string;
+  category: string | null;
+  urls: string[] | null;
+  domains: string[] | null;
 };
 
 type AiResult = {
@@ -33,7 +35,8 @@ const examples = [
 export default function App() {
   const [value, setValue] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [dbHistory, setDbHistory] = useState<DbHistoryItem[]>([]);
+  const [feedbackSent, setFeedbackSent] = useState<Record<string, string>>({});
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -45,20 +48,33 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    try {
-      const savedHistory = localStorage.getItem("clicsur-history");
-
-      if (savedHistory) {
-        setHistory(JSON.parse(savedHistory));
-      }
-    } catch {
-      localStorage.removeItem("clicsur-history");
-    }
+    loadDbHistory();
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem("clicsur-history", JSON.stringify(history));
-  }, [history]);
+  async function saveFeedback(
+    analysisId: string,
+    feedbackType: "correct" | "incorrect"
+  ) {
+    if (feedbackSent[analysisId]) return;
+
+    const { error } = await supabase.from("feedback").insert({
+      analysis_id: analysisId,
+      feedback_type: feedbackType,
+    });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setFeedbackSent((current) => ({
+      ...current,
+      [analysisId]:
+        feedbackType === "correct"
+          ? "Merci pour votre retour 👍"
+          : "Merci pour votre signalement 👍",
+    }));
+  }
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -69,6 +85,21 @@ export default function App() {
 
     return () => clearTimeout(timer);
   }, [cooldown]);
+
+  async function loadDbHistory() {
+    const { data, error } = await supabase
+      .from("analyses")
+      .select("id, created_at, input_text, risk, score, category, urls, domains")
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (error) {
+      console.error("Erreur chargement historique Supabase :", error);
+      return;
+    }
+
+    setDbHistory((data || []) as DbHistoryItem[]);
+  }
 
   async function prepareImageForOcr(file: File) {
     const imageBitmap = await createImageBitmap(file);
@@ -155,9 +186,7 @@ export default function App() {
     }
   }
 
-  async function handleImageUpload(
-    event: React.ChangeEvent<HTMLInputElement>
-  ) {
+  async function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     if (!file) return;
@@ -200,17 +229,17 @@ export default function App() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-          text: textToAnalyze,
-          localAnalysis: {
-            risk: analysis.risk,
-            score: analysis.score,
-            category: analysis.category,
-            likelyIntent: analysis.likelyIntent,
-            confidenceLevel: analysis.confidenceLevel,
-            safeSignals: analysis.safeSignals,
-            alerts: analysis.alerts,
-          },
-        }),
+            text: textToAnalyze,
+            localAnalysis: {
+              risk: analysis.risk,
+              score: analysis.score,
+              category: analysis.category,
+              likelyIntent: analysis.likelyIntent,
+              confidenceLevel: analysis.confidenceLevel,
+              safeSignals: analysis.safeSignals,
+              alerts: analysis.alerts,
+            },
+          }),
         });
 
         const data = await response.json();
@@ -242,17 +271,7 @@ export default function App() {
       });
     }
 
-    const item: HistoryItem = {
-      id: crypto.randomUUID(),
-      text: textToAnalyze,
-      risk: analysis.risk,
-      color: analysis.color,
-      score: analysis.score,
-      category: analysis.category,
-      createdAt: new Date().toLocaleString("fr-FR"),
-    };
-
-    setHistory((current) => [item, ...current].slice(0, 8));
+    await loadDbHistory();
 
     setTimeout(() => {
       resultRef.current?.scrollIntoView({
@@ -368,8 +387,8 @@ ${aiBlock}
           </h1>
 
           <p className="text-slate-600 text-lg max-w-2xl mx-auto leading-relaxed">
-            ClicSûr aide à repérer les SMS frauduleux, faux emails,
-            arnaques au colis, fausses banques et liens suspects.
+            ClicSûr aide à repérer les SMS frauduleux, faux emails, arnaques au
+            colis, fausses banques et liens suspects.
           </p>
         </div>
 
@@ -430,8 +449,8 @@ ${aiBlock}
             </p>
 
             <p className="text-sm text-slate-500 mt-1">
-              Ajoutez une image ou un screenshot : ClicSûr extrait le texte,
-              le nettoie puis lance l’analyse automatiquement.
+              Ajoutez une image ou un screenshot : ClicSûr extrait le texte, le
+              nettoie puis lance l’analyse automatiquement.
             </p>
 
             <input
@@ -515,9 +534,7 @@ ${aiBlock}
 
                 <div className="mt-4 grid md:grid-cols-2 gap-4">
                   <div className="bg-white border border-slate-200 rounded-2xl p-4">
-                    <p className="text-sm text-slate-500">
-                      Objectif probable
-                    </p>
+                    <p className="text-sm text-slate-500">Objectif probable</p>
 
                     <p className="mt-1 font-semibold text-slate-900">
                       {result.likelyIntent || "Indéterminé"}
@@ -583,9 +600,7 @@ ${aiBlock}
             <div className="bg-white border border-slate-200 rounded-2xl p-4">
               <p className="font-semibold text-slate-900">Recommandation</p>
 
-              <p className="text-slate-600 mt-1">
-                {result.recommendation}
-              </p>
+              <p className="text-slate-600 mt-1">{result.recommendation}</p>
             </div>
 
             {aiLoading && (
@@ -611,26 +626,18 @@ ${aiBlock}
                 <div>
                   <p className="font-semibold text-slate-900">Analyse IA</p>
 
-                  <p className="text-slate-600 mt-1">
-                    {aiResult.summary}
-                  </p>
+                  <p className="text-slate-600 mt-1">{aiResult.summary}</p>
                 </div>
 
                 <div>
-                  <p className="font-medium text-slate-900">
-                    Niveau détecté
-                  </p>
+                  <p className="font-medium text-slate-900">Niveau détecté</p>
 
-                  <p className="text-slate-600">
-                    {aiResult.riskLevel}
-                  </p>
+                  <p className="text-slate-600">{aiResult.riskLevel}</p>
                 </div>
 
                 {Array.isArray(aiResult.explanation) && (
                   <div>
-                    <p className="font-medium text-slate-900">
-                      Explications
-                    </p>
+                    <p className="font-medium text-slate-900">Explications</p>
 
                     <ul className="mt-2 space-y-2 text-slate-600">
                       {aiResult.explanation.map((item, index) => (
@@ -665,80 +672,121 @@ ${aiBlock}
           </div>
         )}
 
-        {history.length > 0 && (
+        {dbHistory.length > 0 && (
           <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="font-semibold text-lg">Analyses récentes</h2>
+                <h2 className="font-semibold text-lg">
+                  Historique des analyses
+                </h2>
 
                 <p className="text-sm text-slate-500">
-                  Historique conservé uniquement sur cet appareil.
+                  Les 10 dernières analyses enregistrées dans Supabase.
                 </p>
               </div>
 
               <button
-                onClick={() => setHistory([])}
-                className="text-sm text-slate-500 hover:text-slate-900"
+                onClick={loadDbHistory}
+                className="text-sm text-blue-600 hover:text-blue-800"
               >
-                Effacer
+                Rafraîchir
               </button>
             </div>
 
             <div className="mt-4 space-y-3">
-              {history.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-start justify-between gap-4 border border-slate-100 rounded-2xl p-4"
-                >
-                  <div>
-                    <p className="text-sm text-slate-500">
-                      {item.createdAt}
-                    </p>
+              {dbHistory.map((item) => {
+                const color =
+                  item.risk === "Élevé"
+                    ? "red"
+                    : item.risk === "Moyen"
+                    ? "yellow"
+                    : "emerald";
 
-                    <p className="mt-1 text-sm font-medium text-slate-600">
-                      {item.category}
-                    </p>
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-start justify-between gap-4 border border-slate-100 rounded-2xl p-4"
+                  >
+                    <div>
+                      <p className="text-sm text-slate-500">
+                        {new Date(item.created_at).toLocaleString("fr-FR")}
+                      </p>
 
-                    <p className="mt-1 text-slate-700 line-clamp-2">
-                      {item.text}
-                    </p>
+                      <p className="mt-1 text-sm font-medium text-slate-600">
+                        {item.category || "Analyse générale"}
+                      </p>
 
-                    <button
-                      onClick={() => handleAnalyze(item.text)}
-                      className="mt-2 text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      Réanalyser
-                    </button>
+                      <p className="mt-1 text-slate-700 line-clamp-2">
+                        {item.input_text}
+                      </p>
+
+                      {item.domains && item.domains.length > 0 && (
+                        <p className="mt-2 text-xs text-slate-500">
+                          Domaine détecté : {item.domains.join(", ")}
+                        </p>
+                      )}
+
+                      <div className="mt-2 flex flex-wrap items-center gap-4">
+                        <button
+                          onClick={() => handleAnalyze(item.input_text)}
+                          className="text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          Réanalyser
+                        </button>
+
+                        <button
+                          onClick={() => saveFeedback(item.id, "correct")}
+                          disabled={Boolean(feedbackSent[item.id])}
+                          className="text-sm text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          ✅ Analyse correcte
+                        </button>
+
+                        <button
+                          onClick={() => saveFeedback(item.id, "incorrect")}
+                          disabled={Boolean(feedbackSent[item.id])}
+                          className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          ❌ Mauvaise analyse
+                        </button>
+                      </div>
+
+                      {feedbackSent[item.id] && (
+                        <p className="mt-2 text-sm text-emerald-700">
+                          {feedbackSent[item.id]}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span
+                        className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${
+                          color === "red"
+                            ? "bg-red-100 text-red-700"
+                            : color === "yellow"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-emerald-100 text-emerald-700"
+                        }`}
+                      >
+                        {item.risk}
+                      </span>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        {item.score}/10
+                      </p>
+                    </div>
                   </div>
-
-                  <div className="text-right shrink-0">
-                    <span
-                      className={`inline-flex rounded-full px-3 py-1 text-sm font-medium ${
-                        item.color === "red"
-                          ? "bg-red-100 text-red-700"
-                          : item.color === "yellow"
-                          ? "bg-yellow-100 text-yellow-700"
-                          : "bg-emerald-100 text-emerald-700"
-                      }`}
-                    >
-                      {item.risk}
-                    </span>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      {item.score}/10
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
         <div className="text-center text-sm text-slate-500 max-w-2xl mx-auto leading-relaxed">
-          ClicSûr fournit une aide à la détection mais ne garantit pas
-          qu’un contenu soit totalement sûr ou frauduleux. Ne communiquez
-          jamais vos mots de passe, codes bancaires ou informations sensibles
-          depuis un lien reçu par message.
+          ClicSûr fournit une aide à la détection mais ne garantit pas qu’un
+          contenu soit totalement sûr ou frauduleux. Ne communiquez jamais vos
+          mots de passe, codes bancaires ou informations sensibles depuis un
+          lien reçu par message.
         </div>
       </section>
     </main>
