@@ -266,9 +266,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   const marketingCount = countMatches(lower, MARKETING_SIGNALS);
   const otpCount = countMatches(lower, OTP_SIGNALS);
 
-  const hasOtpPattern =
-    /\b\d{4,8}\b/.test(text) &&
-    (otpCount >= 1 || lower.includes("facebook") || lower.includes("code"));
+
 
   const hasStopMention = /\bstop\s?\d{4,6}\b/i.test(text);
   const hasShortSmsNumber = /\b3\d{4}\b/.test(text);
@@ -277,9 +275,60 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   const hasUrgency = includesAny(lower, URGENCY_SIGNALS);
   const hasFakeContestSignal = includesAny(lower, FAKE_CONTEST_SIGNALS);
 
+  const isLowRiskLogisticsNotification =
+  includesAny(lower, [
+    "mondial relay",
+    "by inpost",
+    "inpost",
+    "colis disponible",
+    "votre colis est disponible",
+    "code retrait",
+    "code de retrait",
+    "retrait jusqu'au",
+    "retrait jusqu’au",
+    "locker",
+    "point relais",
+  ]) &&
+  !hasFinancialKeywords &&
+  !hasUrgency &&
+  urls.length === 0;
+
+    const hasOtpPattern =
+  /\b\d{4,8}\b/.test(text) &&
+  (otpCount >= 1 || lower.includes("facebook")) &&
+  !isLowRiskLogisticsNotification;
+
   const mentionsKnownBrand = COMMON_BRANDS.some((brand) =>
     lower.includes(brand)
   );
+
+  if (isLowRiskLogisticsNotification) {
+  const result: AnalysisResult = {
+    risk: "Faible",
+    color: "emerald",
+    score: 1,
+    alerts: ["Notification de retrait colis détectée."],
+    safeSignals: [
+      "Aucune demande de paiement détectée.",
+      "Aucun lien suspect détecté.",
+      "Présence d’un service de livraison connu.",
+    ],
+    recommendation:
+      "Le message semble cohérent avec une notification de retrait colis. Vérifiez simplement que vous attendez bien un colis et ne partagez le code qu’au moment du retrait.",
+    technicalDetails: ["Contexte compatible avec une notification Mondial Relay ou locker."],
+    category: "Retrait colis légitime",
+    confidenceMessage:
+      "Le message ressemble à une notification logistique légitime.",
+    likelyIntent: "Retrait de colis",
+    confidenceLevel: "Moyenne",
+    specialNotice:
+      "📦 Notification de retrait colis détectée. Le message semble cohérent avec une notification logistique, surtout si aucun paiement n’est demandé.",
+  };
+
+  await saveAnalysis(text, result, urls, domains);
+
+  return result;
+}
 
   if (
     hasOtpPattern &&
@@ -844,21 +893,6 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
   } else if (finalScore >= 3) {
     confidenceMessage = "Quelques éléments méritent de la prudence.";
   }
-
-
-  const isLowRiskLogisticsNotification =
-    finalScore <= 2 &&
-    includesAny(lower, [
-      "mondial relay",
-      "colis",
-      "retrait",
-      "locker",
-      "point relais",
-      "code de retrait",
-      "disponible",
-    ]) &&
-    !hasFinancialKeywords &&
-    urls.length === 0;
 
   let specialNotice: string | undefined;
 
