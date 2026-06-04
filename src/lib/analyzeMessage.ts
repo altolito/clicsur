@@ -15,6 +15,7 @@ export type AnalysisResult = {
   confidenceMessage: string;
   likelyIntent: string;
   confidenceLevel: "Faible" | "Moyenne" | "Élevée";
+  specialNotice?: string;
 };
 
 type ThreatProfiles = {
@@ -844,6 +845,31 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     confidenceMessage = "Quelques éléments méritent de la prudence.";
   }
 
+
+  const isLowRiskLogisticsNotification =
+    finalScore <= 2 &&
+    includesAny(lower, [
+      "mondial relay",
+      "colis",
+      "retrait",
+      "locker",
+      "point relais",
+      "code de retrait",
+      "disponible",
+    ]) &&
+    !hasFinancialKeywords &&
+    urls.length === 0;
+
+  let specialNotice: string | undefined;
+
+  if (category === "Code de connexion") {
+    specialNotice =
+      "🔐 Code de vérification ou de retrait détecté. Ce type de message peut être légitime, mais ne partagez jamais ce code avec un tiers. Vérifiez que vous êtes bien à l’origine de l’action ou que vous attendez bien ce colis.";
+  } else if (isLowRiskLogisticsNotification) {
+    specialNotice =
+      "📦 Notification de retrait colis détectée. Le message semble cohérent avec une notification logistique, surtout si aucun paiement n’est demandé. Vérifiez toutefois que vous attendez bien un colis et que l’expéditeur correspond à un service connu.";
+  }
+
   let result: AnalysisResult;
 
   if (finalScore <= 2) {
@@ -864,6 +890,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       confidenceMessage,
       likelyIntent,
       confidenceLevel,
+      specialNotice,
     };
   } else if (finalScore <= 5) {
     result = {
@@ -880,6 +907,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       confidenceMessage,
       likelyIntent,
       confidenceLevel,
+      specialNotice,
     };
   } else {
     result = {
@@ -895,6 +923,7 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       confidenceMessage,
       likelyIntent,
       confidenceLevel,
+      specialNotice,
     };
   }
 

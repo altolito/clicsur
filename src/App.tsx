@@ -532,6 +532,14 @@ ${aiBlock}
                   {result.confidenceMessage}
                 </p>
 
+                {result.specialNotice && (
+                  <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                    <p className="text-sm font-medium text-blue-900">
+                      {result.specialNotice}
+                    </p>
+                  </div>
+                )}
+
                 <div className="mt-4 grid md:grid-cols-2 gap-4">
                   <div className="bg-white border border-slate-200 rounded-2xl p-4">
                     <p className="text-sm text-slate-500">Objectif probable</p>
