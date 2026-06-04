@@ -362,10 +362,15 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     return result;
   }
 
-  if (marketingCount >= 2) {
-    profiles.marketing += 3;
+if (marketingCount >= 2) {
+  profiles.marketing += 3;
+
+  if (hasFinancialKeywords || hasSensitiveKeywords) {
     score += 3;
+  } else {
+    score += 1;
   }
+}
 
   if (hasStopMention) {
     profiles.marketing += 3;
@@ -816,12 +821,12 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       safeSignals,
       "Le message ressemble à un code de vérification ou de connexion."
     );
-  } else if (looksLikeMarketingSms && dominantProfile === "marketing") {
-    category = hasKnownMarketingDomain
-      ? "SMS marketing identifié"
-      : "SMS marketing agressif";
+} else if (looksLikeMarketingSms && dominantProfile === "marketing") {
+  category = hasKnownMarketingDomain
+    ? "SMS marketing identifié"
+    : "Newsletter commerciale";
 
-    score = Math.min(score, hasKnownMarketingDomain ? 4 : 5);
+  score = Math.min(score, hasKnownMarketingDomain ? 2 : 3);
 
     pushUnique(
       alerts,
