@@ -50,6 +50,11 @@ const KNOWN_MARKETING_PLATFORMS = [
   "mailin.fr",
 ];
 
+const TRUSTED_MARKETING_DOMAINS = [
+  "commejaime.fr",
+  "www.commejaime.fr",
+];
+
 const MARKETING_SIGNALS = [
   "offre", "offres", "promo", "promotion", "réduction", "reduction",
   "-50%", "jusqu'à", "jusqua", "offert", "offerts", "gratuit",
@@ -96,6 +101,8 @@ const FAKE_CONTEST_SIGNALS = [
   "récompense", "recompense", "tirage au sort", "lot gagné",
   "gagnant", "coffret",
 ];
+
+
 
 function includesAny(text: string, keywords: string[]) {
   return keywords.some((keyword) => text.includes(keyword));
@@ -263,6 +270,10 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
     domains.some((domain) => isKnownMarketingDomain(domain)) ||
     hasMarketingReputation;
 
+  const hasTrustedMarketingDomain = domains.some((domain) =>
+    TRUSTED_MARKETING_DOMAINS.includes(domain)
+  );
+
   const marketingCount = countMatches(lower, MARKETING_SIGNALS);
   const otpCount = countMatches(lower, OTP_SIGNALS);
 
@@ -365,7 +376,9 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
 if (marketingCount >= 2) {
   profiles.marketing += 3;
 
-  if (hasFinancialKeywords || hasSensitiveKeywords) {
+  if (hasTrustedMarketingDomain) {
+    score += 0;
+  } else if (hasFinancialKeywords || hasSensitiveKeywords) {
     score += 3;
   } else {
     score += 1;
@@ -741,12 +754,13 @@ if (marketingCount >= 2) {
     );
   }
 
-  if (
-    mentionsKnownBrand &&
-    domains.length > 0 &&
-    !looksLikeMarketingSms &&
-    !hasKnownMarketingDomain
-  ) {
+    if (
+      mentionsKnownBrand &&
+      domains.length > 0 &&
+      !looksLikeMarketingSms &&
+      !hasKnownMarketingDomain &&
+      !hasTrustedMarketingDomain
+    ) {
     score += 1;
     profiles.phishing += 1;
 
@@ -826,7 +840,7 @@ if (marketingCount >= 2) {
     ? "SMS marketing identifié"
     : "Newsletter commerciale";
 
-  score = Math.min(score, hasKnownMarketingDomain ? 2 : 3);
+  score = Math.min(score, hasKnownMarketingDomain ? 2 : 2);
 
     pushUnique(
       alerts,
@@ -871,6 +885,22 @@ if (marketingCount >= 2) {
   if (/\b(0|\+33)[1-9](\s?\d{2}){4}\b/.test(text)) {
     pushUnique(technicalDetails, "Numéro de téléphone détecté dans le contenu.");
   }
+
+  if (hasTrustedMarketingDomain && dominantProfile === "marketing") {
+  score = Math.min(score, 2);
+
+  category = "Newsletter commerciale";
+
+  pushUnique(
+    safeSignals,
+    "Le lien correspond à un domaine officiel connu de la marque."
+  );
+
+  pushUnique(
+    technicalDetails,
+    "Domaine marketing officiel détecté."
+  );
+}
 
   const finalScore = Math.max(0, Math.min(score, 10));
   const confidenceLevel = getConfidenceLevel(finalScore, dominantScore);
