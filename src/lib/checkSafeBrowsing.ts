@@ -24,8 +24,6 @@ export async function checkSafeBrowsing(
 
     const data = await response.json();
 
-    console.log("SAFE BROWSING", url, data);
-
     return {
       dangerous: data.dangerous ?? false,
       threats: data.threats ?? [],

@@ -570,7 +570,14 @@ if (marketingCount >= 2) {
       pushUnique(technicalDetails, detail);
     });
 
+    
     const safeBrowsing = await checkSafeBrowsing(url);
+    pushUnique(
+    technicalDetails,
+    safeBrowsing.dangerous
+      ? "Google Safe Browsing : URL signalée dangereuse."
+      : "Google Safe Browsing : aucune menace détectée."
+  );
 
     if (safeBrowsing.dangerous) {
       score += 4;
