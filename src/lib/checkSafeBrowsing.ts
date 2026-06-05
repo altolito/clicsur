@@ -24,14 +24,18 @@ export async function checkSafeBrowsing(
 
     const data = await response.json();
 
+    console.log("SAFE BROWSING", url, data);
+
     return {
       dangerous: data.dangerous ?? false,
       threats: data.threats ?? [],
     };
-  } catch {
-    return {
-      dangerous: false,
-      threats: [],
-    };
+  } catch (error) {
+  console.error("SAFE BROWSING ERROR", error);
+
+  return {
+    dangerous: false,
+    threats: [],
+  };
   }
 }
