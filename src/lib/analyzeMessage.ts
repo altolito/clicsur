@@ -48,6 +48,7 @@ const KNOWN_MARKETING_PLATFORMS = [
   "mailchimp.com",
   "mailjet.com",
   "mailin.fr",
+  "commejaime.fr",
 ];
 
 const TRUSTED_MARKETING_DOMAINS = [
