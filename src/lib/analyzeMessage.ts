@@ -2,6 +2,8 @@ import { analyzeDomain, extractDomain } from "./domainAnalysis";
 import { checkSafeBrowsing } from "./checkSafeBrowsing";
 import { getDomainReputation } from "./domainReputation";
 import { supabase } from "./supabase";
+import { checkPhishTank } from "./checkPhishTank";
+
 
 export type AnalysisResult = {
   risk: "Faible" | "Moyen" | "Élevé";
@@ -593,7 +595,42 @@ if (marketingCount >= 2) {
         pushUnique(technicalDetails, `Menace Google détectée : ${threat}`);
       });
     }
+      const phishTank = await checkPhishTank(String(url));
+
+pushUnique(
+  technicalDetails,
+  phishTank.listed
+    ? "PhishTank : URL présente dans la base publique de phishing."
+    : "PhishTank : URL non trouvée dans la base publique."
+);
+
+      if (phishTank.listed) {
+        score += 4;
+        profiles.phishing += 5;
+        category = "URL référencée comme phishing";
+
+        pushUnique(
+          alerts,
+          "Cette URL est présente dans une base publique de phishing."
+        );
+
+        if (phishTank.verified) {
+          pushUnique(
+            technicalDetails,
+            "PhishTank : phishing vérifié."
+          );
+        }
+
+        if (phishTank.phishDetailUrl) {
+          pushUnique(
+            technicalDetails,
+            `Fiche PhishTank : ${phishTank.phishDetailUrl}`
+          );
+        }
+      }
   }
+
+
 
   const hasOfficialTrustedDomain = technicalDetails.some((detail) =>
     detail.includes("domaine officiel connu")
@@ -825,15 +862,24 @@ if (marketingCount >= 2) {
 
   const [dominantProfile, dominantScore] = getDominantProfile(profiles);
 
+  let effectiveProfile = dominantProfile;
+
+  if (category === "Lien officiel probable") {
+    effectiveProfile = "marketing";
+  }
+
   const likelyIntent =
     dominantScore > 0 ? getLikelyIntent(dominantProfile) : "Indéterminé";
 
-  if (dominantScore > 0) {
-    pushUnique(
-      technicalDetails,
-      `Profil dominant détecté : ${dominantProfile}`
-    );
-  }
+  if (
+    dominantScore > 0 &&
+      category !== "Lien officiel probable"
+    ) {
+      pushUnique(
+        technicalDetails,
+        `Profil dominant détecté : ${dominantProfile}`
+      );
+    }
 
   if (category === "Lien officiel probable") {
     // On garde cette catégorie prioritaire.
