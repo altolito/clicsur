@@ -431,7 +431,7 @@ if (marketingCount >= 2) {
   if (hasKnownMarketingDomain) {
     pushUnique(
       safeSignals,
-      "Le lien utilise une plateforme ou un domaine courant dans les campagnes marketing."
+      "Le lien correspond à un domaine officiel connu."
     );
 
     const knownMarketingDomains = [
@@ -523,7 +523,9 @@ if (marketingCount >= 2) {
     score += looksLikeMarketingSms ? 1 : 2;
     profiles.phishing += looksLikeMarketingSms ? 0 : 1;
 
+      if (!hasKnownMarketingDomain) {
     pushUnique(alerts, "Un lien a été détecté dans le message.");
+      }
     pushUnique(technicalDetails, `Nombre de liens détectés : ${urls.length}`);
   }
 
