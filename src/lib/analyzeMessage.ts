@@ -862,12 +862,6 @@ pushUnique(
 
   const [dominantProfile, dominantScore] = getDominantProfile(profiles);
 
-  let effectiveProfile = dominantProfile;
-
-  if (category === "Lien officiel probable") {
-    effectiveProfile = "marketing";
-  }
-
   const likelyIntent =
     dominantScore > 0 ? getLikelyIntent(dominantProfile) : "Indéterminé";
 
