@@ -186,7 +186,8 @@ async function saveAnalysis(
   inputText: string,
   result: AnalysisResult,
   urls: string[] = [],
-  domains: string[] = []
+  domains: string[] = [],
+  userId: string | null = null
 ) {
   try {
     const { error } = await supabase.from("analyses").insert({
@@ -196,6 +197,7 @@ async function saveAnalysis(
       category: result.category,
       urls,
       domains,
+      user_id: userId,
     });
 
     if (error) {
@@ -206,7 +208,10 @@ async function saveAnalysis(
   }
 }
 
-export async function analyzeMessage(text: string): Promise<AnalysisResult> {
+export async function analyzeMessage(
+  text: string,
+  userId: string | null = null
+): Promise<AnalysisResult> {
   const lower = normalizeText(text);
 
   let score = 0;
@@ -339,7 +344,13 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       "📦 Notification de retrait colis détectée. Le message semble cohérent avec une notification logistique, surtout si aucun paiement n’est demandé.",
   };
 
-  await saveAnalysis(text, result, urls, domains);
+  await saveAnalysis(
+  text,
+  result,
+  urls,
+  domains,
+  userId
+);
 
   return result;
 }
@@ -371,7 +382,13 @@ export async function analyzeMessage(text: string): Promise<AnalysisResult> {
       confidenceLevel: "Moyenne",
     };
 
-    await saveAnalysis(text, result, urls, domains);
+    await saveAnalysis(
+  text,
+  result,
+  urls,
+  domains,
+  userId
+);
 
     return result;
   }
@@ -1046,7 +1063,13 @@ pushUnique(
     };
   }
 
-  await saveAnalysis(text, result, urls, domains);
+  await saveAnalysis(
+  text,
+  result,
+  urls,
+  domains,
+  userId
+);
 
   return result;
 }

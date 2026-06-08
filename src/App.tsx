@@ -14,6 +14,7 @@ type DbHistoryItem = {
   category: string | null;
   urls: string[] | null;
   domains: string[] | null;
+  user_id: string | null;
 };
 
 type AiResult = {
@@ -65,8 +66,8 @@ useEffect(() => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    loadDbHistory();
-  }, []);
+  loadDbHistory();
+  }, [session]);
 
   async function saveFeedback(
     analysisId: string,
@@ -104,19 +105,27 @@ useEffect(() => {
   }, [cooldown]);
 
   async function loadDbHistory() {
-    const { data, error } = await supabase
-      .from("analyses")
-      .select("id, created_at, input_text, risk, score, category, urls, domains")
-      .order("created_at", { ascending: false })
-      .limit(10);
+  let query = supabase
+    .from("analyses")
+    .select("id, created_at, input_text, risk, score, category, urls, domains, user_id")
+    .order("created_at", { ascending: false })
+    .limit(10);
 
-    if (error) {
-      console.error("Erreur chargement historique Supabase :", error);
-      return;
-    }
-
-    setDbHistory((data || []) as DbHistoryItem[]);
+  if (session?.user.id) {
+    query = query.eq("user_id", session.user.id);
+  } else {
+    query = query.is("user_id", null);
   }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error("Erreur chargement historique Supabase :", error);
+    return;
+  }
+
+  setDbHistory((data || []) as DbHistoryItem[]);
+}
 
   async function prepareImageForOcr(file: File) {
     const imageBitmap = await createImageBitmap(file);
@@ -229,7 +238,10 @@ useEffect(() => {
 
     setCooldown(5);
 
-    const analysis = await analyzeMessage(textToAnalyze);
+    const analysis = await analyzeMessage(
+  textToAnalyze,
+  session?.user.id ?? null
+    );
     const shouldUseAI = analysis.score >= AI_TRIGGER_SCORE;
 
     setResult(analysis);
