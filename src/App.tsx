@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import Tesseract from "tesseract.js";
 import { analyzeMessage, type AnalysisResult } from "./lib/analyzeMessage";
 import { supabase } from "./lib/supabase";
+import type { Session } from "@supabase/supabase-js";
+import AuthBox from "./AuthBox";
 
 type DbHistoryItem = {
   id: string;
@@ -33,6 +35,21 @@ const examples = [
 ];
 
 export default function App() {
+  const [session, setSession] = useState<Session | null>(null);
+
+useEffect(() => {
+  supabase.auth.getSession().then(({ data }) => {
+    setSession(data.session);
+  });
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    setSession(session);
+  });
+
+  return () => subscription.unsubscribe();
+}, []);
   const [value, setValue] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [dbHistory, setDbHistory] = useState<DbHistoryItem[]>([]);
@@ -356,6 +373,24 @@ ${aiBlock}
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 px-6 py-10">
       <section className="mx-auto max-w-5xl space-y-10">
+        {session ? (
+                  <div className="rounded-xl border bg-white p-4 mb-6">
+                    <div className="flex items-center justify-between">
+                      <span>
+                        Connecté : {session.user.email}
+                      </span>
+
+                      <button
+                        onClick={() => supabase.auth.signOut()}
+                        className="rounded-lg border px-3 py-2"
+                      >
+                        Se déconnecter
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <AuthBox />
+                )}
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-bold">
