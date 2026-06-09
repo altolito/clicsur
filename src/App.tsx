@@ -75,10 +75,11 @@ useEffect(() => {
   ) {
     if (feedbackSent[analysisId]) return;
 
-    const { error } = await supabase.from("feedback").insert({
-      analysis_id: analysisId,
-      feedback_type: feedbackType,
-    });
+   const { error } = await supabase.from("feedback").insert({
+  analysis_id: analysisId,
+  feedback_type: feedbackType,
+  user_id: session?.user.id ?? null,
+  });
 
     if (error) {
       console.error(error);
@@ -731,13 +732,13 @@ ${aiBlock}
           <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="font-semibold text-lg">
-                  Historique des analyses
-                </h2>
+               <h2 className="font-semibold text-lg">
+                Mes analyses
+              </h2>
 
-                <p className="text-sm text-slate-500">
-                  Les 10 dernières analyses enregistrées dans Supabase.
-                </p>
+              <p className="text-sm text-slate-500">
+                Mes 10 dernières analyses
+              </p>
               </div>
 
               <button
