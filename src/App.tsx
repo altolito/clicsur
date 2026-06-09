@@ -75,7 +75,9 @@ useEffect(() => {
   ) {
     if (feedbackSent[analysisId]) return;
 
-   const { error } = await supabase.from("feedback").insert({
+    console.log("SESSION USER =", session?.user?.id);
+
+  const { error } = await supabase.from("feedback").insert({
   analysis_id: analysisId,
   feedback_type: feedbackType,
   user_id: session?.user.id ?? null,
