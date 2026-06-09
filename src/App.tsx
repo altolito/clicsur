@@ -17,6 +17,13 @@ type DbHistoryItem = {
   user_id: string | null;
 };
 
+type UserStats = {
+  total: number;
+  low: number;
+  medium: number;
+  high: number;
+};
+
 type AiResult = {
   summary?: string;
   riskLevel?: "Faible" | "Moyen" | "Élevé";
@@ -37,6 +44,12 @@ const examples = [
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
+  const [userStats, setUserStats] = useState<UserStats>({
+  total: 0,
+  low: 0,
+  medium: 0,
+  high: 0,
+});
 
 useEffect(() => {
   supabase.auth.getSession().then(({ data }) => {
@@ -67,6 +80,7 @@ useEffect(() => {
 
   useEffect(() => {
   loadDbHistory();
+  loadUserStats();
   }, [session]);
 
   async function saveFeedback(
@@ -129,6 +143,37 @@ useEffect(() => {
   }
 
   setDbHistory((data || []) as DbHistoryItem[]);
+}
+
+async function loadUserStats() {
+  if (!session?.user.id) {
+    setUserStats({
+      total: 0,
+      low: 0,
+      medium: 0,
+      high: 0,
+    });
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("analyses")
+    .select("risk")
+    .eq("user_id", session.user.id);
+
+  if (error) {
+    console.error("Erreur chargement statistiques :", error);
+    return;
+  }
+
+  const analyses = data || [];
+
+  setUserStats({
+    total: analyses.length,
+    low: analyses.filter((item) => item.risk === "Faible").length,
+    medium: analyses.filter((item) => item.risk === "Moyen").length,
+    high: analyses.filter((item) => item.risk === "Élevé").length,
+  });
 }
 
   async function prepareImageForOcr(file: File) {
@@ -407,6 +452,32 @@ ${aiBlock}
                 ) : (
                   <AuthBox />
                 )}
+
+                {session && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                      <p className="text-sm text-slate-500">Analyses</p>
+                      <p className="text-2xl font-bold">{userStats.total}</p>
+                    </div>
+
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+                      <p className="text-sm text-emerald-700">Faibles</p>
+                      <p className="text-2xl font-bold text-emerald-700">{userStats.low}</p>
+                    </div>
+
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4">
+                      <p className="text-sm text-yellow-700">Moyens</p>
+                      <p className="text-2xl font-bold text-yellow-700">{userStats.medium}</p>
+                    </div>
+
+                    <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+                      <p className="text-sm text-red-700">Élevés</p>
+                      <p className="text-2xl font-bold text-red-700">{userStats.high}</p>
+                    </div>
+                  </div>
+                )}
+
+
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-bold">
