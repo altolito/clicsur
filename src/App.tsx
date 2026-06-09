@@ -81,6 +81,9 @@ useEffect(() => {
   user_id: session?.user.id ?? null,
   });
 
+  console.log("FEEDBACK ENVOYE");
+  console.log("ERREUR =", error);
+
     if (error) {
       console.error(error);
       return;
