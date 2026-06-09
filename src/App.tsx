@@ -456,22 +456,22 @@ ${aiBlock}
                 {session && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="bg-white border border-slate-200 rounded-2xl p-4">
-                      <p className="text-sm text-slate-500">Analyses</p>
+                      <p className="text-sm text-slate-500">Analyses réalisées</p>
                       <p className="text-2xl font-bold">{userStats.total}</p>
                     </div>
 
                     <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
-                      <p className="text-sm text-emerald-700">Faibles</p>
+                      <p className="text-sm text-emerald-700">Contenus sûrs</p>
                       <p className="text-2xl font-bold text-emerald-700">{userStats.low}</p>
                     </div>
 
                     <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4">
-                      <p className="text-sm text-yellow-700">Moyens</p>
+                      <p className="text-sm text-yellow-700">Suspicions</p>
                       <p className="text-2xl font-bold text-yellow-700">{userStats.medium}</p>
                     </div>
 
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
-                      <p className="text-sm text-red-700">Élevés</p>
+                      <p className="text-sm text-red-700">Arnaques détectées</p>
                       <p className="text-2xl font-bold text-red-700">{userStats.high}</p>
                     </div>
                   </div>
