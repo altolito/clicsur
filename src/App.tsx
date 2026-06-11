@@ -22,6 +22,8 @@ type UserStats = {
   low: number;
   medium: number;
   high: number;
+  feedbacks: number;
+  positiveRate: number;
 };
 
 type AiResult = {
@@ -44,11 +46,13 @@ const examples = [
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
-  const [userStats, setUserStats] = useState<UserStats>({
+const [userStats, setUserStats] = useState<UserStats>({
   total: 0,
   low: 0,
   medium: 0,
   high: 0,
+  feedbacks: 0,
+  positiveRate: 0,
 });
 
 useEffect(() => {
@@ -152,6 +156,8 @@ async function loadUserStats() {
       low: 0,
       medium: 0,
       high: 0,
+      feedbacks: 0,
+      positiveRate: 0,
     });
     return;
   }
@@ -168,12 +174,30 @@ async function loadUserStats() {
 
   const analyses = data || [];
 
-  setUserStats({
-    total: analyses.length,
-    low: analyses.filter((item) => item.risk === "Faible").length,
-    medium: analyses.filter((item) => item.risk === "Moyen").length,
-    high: analyses.filter((item) => item.risk === "Élevé").length,
-  });
+  const { data: feedbackData } = await supabase
+  .from("feedback")
+  .select("feedback_type")
+  .eq("user_id", session.user.id);
+
+const feedbacks = feedbackData || [];
+
+const positiveFeedbacks = feedbacks.filter(
+  (f) => f.feedback_type === "correct"
+).length;
+
+const positiveRate =
+  feedbacks.length > 0
+    ? Math.round((positiveFeedbacks / feedbacks.length) * 100)
+    : 0;
+
+setUserStats({
+  total: analyses.length,
+  low: analyses.filter((item) => item.risk === "Faible").length,
+  medium: analyses.filter((item) => item.risk === "Moyen").length,
+  high: analyses.filter((item) => item.risk === "Élevé").length,
+  feedbacks: feedbacks.length,
+  positiveRate,
+});
 }
 
   async function prepareImageForOcr(file: File) {
@@ -473,6 +497,19 @@ ${aiBlock}
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
                       <p className="text-sm text-red-700">Arnaques détectées</p>
                       <p className="text-2xl font-bold text-red-700">{userStats.high}</p>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                      <p className="text-sm text-blue-700">Feedbacks</p>
+                      <p className="text-2xl font-bold text-blue-700">
+                        {userStats.feedbacks}
+                      </p>
+                    </div>
+
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4">
+                      <p className="text-sm text-indigo-700">Satisfaction</p>
+                      <p className="text-2xl font-bold text-indigo-700">
+                        {userStats.positiveRate}%
+                      </p>
                     </div>
                   </div>
                 )}
