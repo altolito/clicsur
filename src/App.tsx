@@ -514,6 +514,51 @@ ${aiBlock}
                   </div>
                 )}
 
+                {session && userStats.total > 0 && (
+  <div className="bg-white rounded-2xl p-6 border">
+    <h3 className="font-semibold mb-4">
+      Répartition des analyses
+    </h3>
+
+    <div className="w-full h-6 bg-slate-200 rounded-full overflow-hidden flex">
+      <div
+        className="bg-green-500"
+        style={{
+          width: `${(userStats.low / userStats.total) * 100}%`,
+        }}
+      />
+
+      <div
+        className="bg-yellow-500"
+        style={{
+          width: `${(userStats.medium / userStats.total) * 100}%`,
+        }}
+      />
+
+      <div
+        className="bg-red-500"
+        style={{
+          width: `${(userStats.high / userStats.total) * 100}%`,
+        }}
+      />
+    </div>
+
+    <div className="grid grid-cols-3 gap-4 mt-4 text-sm">
+      <div className="text-green-700">
+        🟢 Faibles : {userStats.low} ({Math.round((userStats.low / userStats.total) * 100)}%)
+      </div>
+
+      <div className="text-yellow-700">
+        🟡 Moyennes : {userStats.medium} ({Math.round((userStats.medium / userStats.total) * 100)}%)
+      </div>
+
+      <div className="text-red-700">
+        🔴 Élevées : {userStats.high} ({Math.round((userStats.high / userStats.total) * 100)}%)
+      </div>
+    </div>
+  </div>
+)}
+
 
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3">
