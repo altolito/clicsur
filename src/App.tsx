@@ -24,6 +24,8 @@ type UserStats = {
   high: number;
   feedbacks: number;
   positiveRate: number;
+  positiveFeedbacks: number;
+  negativeFeedbacks: number;
 };
 
 type AiResult = {
@@ -53,6 +55,8 @@ const [userStats, setUserStats] = useState<UserStats>({
   high: 0,
   feedbacks: 0,
   positiveRate: 0,
+  positiveFeedbacks: 0,
+  negativeFeedbacks: 0,
 });
 
 useEffect(() => {
@@ -158,6 +162,8 @@ async function loadUserStats() {
       high: 0,
       feedbacks: 0,
       positiveRate: 0,
+      positiveFeedbacks: 0,
+      negativeFeedbacks: 0,
     });
     return;
   }
@@ -179,10 +185,16 @@ async function loadUserStats() {
   .select("feedback_type")
   .eq("user_id", session.user.id);
 
+  
+
 const feedbacks = feedbackData || [];
 
 const positiveFeedbacks = feedbacks.filter(
   (f) => f.feedback_type === "correct"
+).length;
+
+const negativeFeedbacks = feedbacks.filter(
+  (f) => f.feedback_type === "incorrect"
 ).length;
 
 const positiveRate =
@@ -197,6 +209,8 @@ setUserStats({
   high: analyses.filter((item) => item.risk === "Élevé").length,
   feedbacks: feedbacks.length,
   positiveRate,
+  positiveFeedbacks,
+  negativeFeedbacks,
 });
 }
 
@@ -502,6 +516,20 @@ ${aiBlock}
                       <p className="text-sm text-blue-700">Feedbacks</p>
                       <p className="text-2xl font-bold text-blue-700">
                         {userStats.feedbacks}
+                      </p>
+                    </div>
+
+                    <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
+                      <p className="text-sm text-green-700">Feedbacks positifs</p>
+                      <p className="text-2xl font-bold text-green-700">
+                        {userStats.positiveFeedbacks}
+                      </p>
+                    </div>
+
+                    <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+                      <p className="text-sm text-red-700">Feedbacks négatifs</p>
+                      <p className="text-2xl font-bold text-red-700">
+                        {userStats.negativeFeedbacks}
                       </p>
                     </div>
 
