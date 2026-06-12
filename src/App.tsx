@@ -15,6 +15,7 @@ type DbHistoryItem = {
   urls: string[] | null;
   domains: string[] | null;
   user_id: string | null;
+  feedback_type?: "correct" | "incorrect" | null;
 };
 
 type UserStats = {
@@ -132,10 +133,10 @@ useEffect(() => {
 
   async function loadDbHistory() {
   let query = supabase
-    .from("analyses")
-    .select("id, created_at, input_text, risk, score, category, urls, domains, user_id")
-    .order("created_at", { ascending: false })
-    .limit(10);
+        .from("analyses")
+        .select("id, created_at, input_text, risk, score, category, urls, domains, user_id")
+        .order("created_at", { ascending: false })
+        .limit(10);
 
   if (session?.user.id) {
     query = query.eq("user_id", session.user.id);
@@ -149,9 +150,30 @@ useEffect(() => {
     console.error("Erreur chargement historique Supabase :", error);
     return;
   }
+  const historyItems = (data || []) as DbHistoryItem[];
 
-  setDbHistory((data || []) as DbHistoryItem[]);
-}
+  const analysisIds = historyItems.map((item) => item.id);
+
+  const { data: feedbackRows } = await supabase
+    .from("feedback")
+    .select("analysis_id, feedback_type")
+    .in("analysis_id", analysisIds)
+    .eq("user_id", session?.user.id ?? "");
+
+  const feedbackByAnalysisId = new Map(
+    (feedbackRows || []).map((feedback) => [
+      feedback.analysis_id,
+      feedback.feedback_type,
+    ])
+  );
+
+  const enrichedHistory = historyItems.map((item) => ({
+    ...item,
+    feedback_type: feedbackByAnalysisId.get(item.id) ?? null,
+  }));
+
+  setDbHistory(enrichedHistory);
+  }
 
 async function loadUserStats() {
   if (!session?.user.id) {
