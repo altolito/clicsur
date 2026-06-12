@@ -172,6 +172,7 @@ useEffect(() => {
     feedback_type: feedbackByAnalysisId.get(item.id) ?? null,
   }));
 
+  console.log("ENRICHED HISTORY =", enrichedHistory);
   setDbHistory(enrichedHistory);
   }
 
