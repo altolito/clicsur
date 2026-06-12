@@ -988,6 +988,18 @@ ${aiBlock}
                         </p>
                       )}
 
+                      {item.feedback_type === "correct" && (
+                        <p className="mt-2 inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+                          ✅ Analyse validée
+                        </p>
+                      )}
+
+                      {item.feedback_type === "incorrect" && (
+                        <p className="mt-2 inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
+                          ❌ Correction signalée
+                        </p>
+                      )}
+
                       <div className="mt-2 flex flex-wrap items-center gap-4">
                         <button
                           onClick={() => handleAnalyze(item.input_text)}
