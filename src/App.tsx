@@ -988,6 +988,13 @@ ${aiBlock}
                         </p>
                       )}
 
+
+
+<p className="text-xs text-red-500">
+  feedback: {String(item.feedback_type)}
+</p>
+
+
                       {item.feedback_type === "correct" && (
                         <p className="mt-2 inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
                           ✅ Analyse validée
