@@ -513,21 +513,21 @@ ${aiBlock}
                       <p className="text-2xl font-bold text-red-700">{userStats.high}</p>
                     </div>
                     <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                      <p className="text-sm text-blue-700">Feedbacks</p>
+                      <p className="text-sm text-blue-700">Avis reçus</p>
                       <p className="text-2xl font-bold text-blue-700">
                         {userStats.feedbacks}
                       </p>
                     </div>
 
                     <div className="bg-green-50 border border-green-200 rounded-2xl p-4">
-                      <p className="text-sm text-green-700">Feedbacks positifs</p>
+                      <p className="text-sm text-green-700">Analyses validées</p>
                       <p className="text-2xl font-bold text-green-700">
                         {userStats.positiveFeedbacks}
                       </p>
                     </div>
 
                     <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
-                      <p className="text-sm text-red-700">Feedbacks négatifs</p>
+                      <p className="text-sm text-red-700">Corrections signalées</p>
                       <p className="text-2xl font-bold text-red-700">
                         {userStats.negativeFeedbacks}
                       </p>
