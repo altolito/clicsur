@@ -172,7 +172,6 @@ useEffect(() => {
     feedback_type: feedbackByAnalysisId.get(item.id) ?? null,
   }));
 
-  console.log("ENRICHED HISTORY =", enrichedHistory);
   setDbHistory(enrichedHistory);
   }
 
@@ -988,12 +987,6 @@ ${aiBlock}
                           Domaine détecté : {item.domains.join(", ")}
                         </p>
                       )}
-
-
-
-<p className="text-xs text-red-500">
-  feedback: {String(item.feedback_type)}
-</p>
 
 
                       {item.feedback_type === "correct" && (
