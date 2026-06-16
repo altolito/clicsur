@@ -43,7 +43,7 @@ const TRUSTED_BRAND_DOMAINS = {
   microsoft: ["microsoft.com", "live.com"],
   google: ["google.com", "gmail.com"],
   netflix: ["netflix.com"],
-  paypal: ["paypal.com"],
+  paypal: ["paypal.com", "paypal.fr", "service.paypal.com"],
   amazon: ["amazon.fr", "amazon.com"],
   ameli: ["ameli.fr"],
   facebook: ["facebook.com", "fb.com"],
@@ -85,14 +85,33 @@ function detectBrandImpersonation(domain: string) {
 
 export function extractDomain(rawUrl: string): string | null {
   try {
-    const cleanedUrl = rawUrl.trim().replace(/[),.;!?]+$/g, "");
+    const cleanedUrl = rawUrl
+      .trim()
+      .replace(/[<>"'()[\],;!?]+$/g, "")
+      .replace(/^[<>"'()[\],;!?]+/g, "");
+
+    const emailMatch = cleanedUrl.match(
+      /[a-zA-Z0-9._%+-]+@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/
+    );
+
+    if (emailMatch?.[1]) {
+      return emailMatch[1].toLowerCase().replace(/^www\./, "");
+    }
+
+    const domainMatch = cleanedUrl.match(
+      /(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?:[/?#:]|$)/
+    );
+
+    if (domainMatch?.[1]) {
+      return domainMatch[1].toLowerCase().replace(/^www\./, "");
+    }
 
     const normalizedUrl =
       cleanedUrl.startsWith("http://") || cleanedUrl.startsWith("https://")
         ? cleanedUrl
         : `https://${cleanedUrl}`;
 
-    return new URL(normalizedUrl).hostname.replace(/^www\./, "");
+    return new URL(normalizedUrl).hostname.toLowerCase().replace(/^www\./, "");
   } catch {
     return null;
   }
