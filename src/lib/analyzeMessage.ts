@@ -268,6 +268,9 @@ export async function analyzeMessage(
   isOfficialTrustedDomain(domain)
     );
 
+    console.log("DOMAINS =", domains);
+    console.log("OFFICIAL =", hasOfficialTrustedDomain);
+
   const domainReputations = domains.map((domain) => ({
     domain,
     reputation: getDomainReputation(domain),
