@@ -3,6 +3,7 @@ import { checkSafeBrowsing } from "./checkSafeBrowsing";
 import { getDomainReputation } from "./domainReputation";
 import { supabase } from "./supabase";
 import { checkPhishTank } from "./checkPhishTank";
+import { isOfficialTrustedDomain } from "./domainAnalysis";
 
 
 export type AnalysisResult = {
@@ -104,6 +105,8 @@ const FAKE_CONTEST_SIGNALS = [
   "récompense", "recompense", "tirage au sort", "lot gagné",
   "gagnant", "coffret",
 ];
+
+
 
 
 
@@ -260,6 +263,10 @@ export async function analyzeMessage(
   const domains = urls
     .map((url) => extractDomain(url))
     .filter((domain): domain is string => Boolean(domain));
+
+    const hasOfficialTrustedDomain = domains.some((domain) =>
+  isOfficialTrustedDomain(domain)
+    );
 
   const domainReputations = domains.map((domain) => ({
     domain,
@@ -648,21 +655,6 @@ pushUnique(
   }
 
 
-
-  const hasOfficialTrustedDomain = technicalDetails.some((detail) =>
-    detail.includes("domaine officiel connu")
-  );
-
-  if (hasOfficialTrustedDomain && score <= 3 && !hasDangerousReputation) {
-    score = Math.max(0, score - 2);
-    category = "Lien officiel probable";
-
-    pushUnique(
-      safeSignals,
-      "Le lien correspond à un domaine officiel connu."
-    );
-  }
-
   if (urls.some((url) => url.length > 80)) {
     score += looksLikeMarketingSms ? 1 : 2;
     profiles.phishing += looksLikeMarketingSms ? 0 : 1;
@@ -966,6 +958,25 @@ pushUnique(
   pushUnique(
     technicalDetails,
     "Domaine marketing officiel détecté."
+  );
+}
+
+if (
+  hasOfficialTrustedDomain &&
+  !hasDangerousReputation &&
+  !hasSensitiveKeywords
+) {
+  score = Math.min(score, 2);
+  category = "Lien officiel probable";
+
+  pushUnique(
+    safeSignals,
+    "Le domaine détecté correspond à un domaine officiel connu."
+  );
+
+  pushUnique(
+    technicalDetails,
+    "Domaine officiel reconnu : réduction du score appliquée."
   );
 }
 

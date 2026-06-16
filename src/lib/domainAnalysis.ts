@@ -52,7 +52,7 @@ const TRUSTED_BRAND_DOMAINS = {
   chronopost: ["chronopost.fr"],
 };
 
-function isOfficialTrustedDomain(domain: string) {
+export function isOfficialTrustedDomain(domain: string) {
   return Object.values(TRUSTED_BRAND_DOMAINS)
     .flat()
     .some(
