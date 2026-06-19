@@ -63,7 +63,6 @@ export function isOfficialTrustedDomain(domain: string) {
 
 function detectBrandImpersonation(domain: string) {
   const normalizedDomain = domain.toLowerCase();
-  console.log("DOMAIN CHECK =", normalizedDomain);
 
   for (const [brand, officialDomains] of Object.entries(TRUSTED_BRAND_DOMAINS)) {
     const mentionsBrand = normalizedDomain.includes(brand);
@@ -72,13 +71,6 @@ function detectBrandImpersonation(domain: string) {
         normalizedDomain === officialDomain ||
         normalizedDomain.endsWith(`.${officialDomain}`)
     );
-
-    console.log(
-  "BRAND RESULT",
-  normalizedDomain,
-  brand,
-  isOfficialDomain
-);
 
     if (mentionsBrand && !isOfficialDomain) {
       return {

@@ -255,11 +255,11 @@ export async function analyzeMessage(
     };
   }
 
-  const urlRegex =
-    /(https?:\/\/[^\s]+|www\.[^\s]+|[a-z0-9-]+\.[a-z]{2,}(\/[^\s]*)?)/gi;
+ const urlRegex =
+  /(https?:\/\/[^\s<>]+|www\.[^\s<>]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|[a-z0-9.-]+\.[a-z]{2,}(\/[^\s<>]*)?)/gi;
 
-  const urls = text.match(urlRegex) || [];
-
+const urls = text.match(urlRegex) || [];
+  
   const domains = urls
     .map((url) => extractDomain(url))
     .filter((domain): domain is string => Boolean(domain));
@@ -267,9 +267,6 @@ export async function analyzeMessage(
     const hasOfficialTrustedDomain = domains.some((domain) =>
   isOfficialTrustedDomain(domain)
     );
-
-    console.log("DOMAINS =", domains);
-    console.log("OFFICIAL =", hasOfficialTrustedDomain);
 
   const domainReputations = domains.map((domain) => ({
     domain,
@@ -964,11 +961,7 @@ pushUnique(
   );
 }
 
-if (
-  hasOfficialTrustedDomain &&
-  !hasDangerousReputation &&
-  !hasSensitiveKeywords
-) {
+if (hasOfficialTrustedDomain && !hasDangerousReputation) {
   score = Math.min(score, 2);
   category = "Lien officiel probable";
 
