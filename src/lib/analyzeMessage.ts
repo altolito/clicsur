@@ -35,6 +35,24 @@ type ThreatProfiles = {
   otp: number;
 };
 
+const MARKETING_SAFE_SIGNALS = [
+  "newsletter",
+  "désabonner",
+  "unsubscribe",
+  "voir en ligne",
+  "consulter en ligne",
+  "votre commande est prête",
+  "votre facture est disponible",
+  "votre relevé est disponible",
+  "merci de votre confiance",
+  "recevoir nos offres",
+  "offre du mois",
+  "nouveautés",
+  "promotions",
+  "préférences",
+  "gérer mes préférences",
+];
+
 const COMMON_BRANDS = [
   "ameli", "caf", "impots", "impôts", "chronopost", "mondial relay",
   "la poste", "netflix", "paypal", "amazon", "apple", "microsoft",
@@ -216,6 +234,11 @@ export async function analyzeMessage(
   userId: string | null = null
 ): Promise<AnalysisResult> {
   const lower = normalizeText(text);
+
+  const looksLikeMarketingEmail =
+  MARKETING_SAFE_SIGNALS.some((signal) =>
+    lower.includes(signal)
+  );
 
   let score = 0;
   let category = "Analyse générale";
@@ -871,18 +894,20 @@ pushUnique(
 
   const [dominantProfile, dominantScore] = getDominantProfile(profiles);
 
-  const likelyIntent =
+  let likelyIntent =
     dominantScore > 0 ? getLikelyIntent(dominantProfile) : "Indéterminé";
 
-  if (
-    dominantScore > 0 &&
-      category !== "Lien officiel probable"
-    ) {
-      pushUnique(
-        technicalDetails,
-        `Profil dominant détecté : ${dominantProfile}`
-      );
-    }
+ if (
+  dominantScore > 0 &&
+  category !== "Lien officiel probable" &&
+  category !== "Communication commerciale légitime" &&
+  !hasOfficialTrustedDomain
+) {
+  pushUnique(
+    technicalDetails,
+    `Profil dominant détecté : ${dominantProfile}`
+  );
+}
 
   if (category === "Lien officiel probable") {
     // On garde cette catégorie prioritaire.
@@ -961,7 +986,38 @@ pushUnique(
   );
 }
 
-if (hasOfficialTrustedDomain && !hasDangerousReputation) {
+if (
+  looksLikeMarketingEmail &&
+  hasOfficialTrustedDomain &&
+  !hasDangerousReputation
+) {
+  score = Math.min(score, 1);
+  category = "Communication commerciale légitime";
+
+  pushUnique(
+    safeSignals,
+    "Le message ressemble à une communication commerciale classique."
+  );
+
+  pushUnique(
+    technicalDetails,
+    "Plusieurs indices correspondent à une newsletter ou un email transactionnel légitime."
+  );
+}
+
+if (
+  looksLikeMarketingEmail &&
+  hasOfficialTrustedDomain &&
+  !hasDangerousReputation
+) {
+  likelyIntent = "Communication commerciale";
+}
+
+if (
+  hasOfficialTrustedDomain &&
+  !hasDangerousReputation &&
+  !looksLikeMarketingEmail
+) {
   score = Math.min(score, 2);
   category = "Lien officiel probable";
 
@@ -977,7 +1033,15 @@ if (hasOfficialTrustedDomain && !hasDangerousReputation) {
 }
 
   const finalScore = Math.max(0, Math.min(score, 10));
-  const confidenceLevel = getConfidenceLevel(finalScore, dominantScore);
+  let confidenceLevel = getConfidenceLevel(finalScore, dominantScore);
+
+  if (
+  looksLikeMarketingEmail &&
+  hasOfficialTrustedDomain &&
+  !hasDangerousReputation
+) {
+  confidenceLevel = "Faible";
+}
 
   let confidenceMessage = "Aucun signal majeur détecté.";
 
