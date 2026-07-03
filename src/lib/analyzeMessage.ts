@@ -1035,6 +1035,11 @@ if (
   const finalScore = Math.max(0, Math.min(score, 10));
   let confidenceLevel = getConfidenceLevel(finalScore, dominantScore);
 
+  const displayedAlerts =
+  category === "Communication commerciale légitime"
+    ? []
+    : alerts;
+
   if (
   looksLikeMarketingEmail &&
   hasOfficialTrustedDomain &&
@@ -1043,9 +1048,12 @@ if (
   confidenceLevel = "Faible";
 }
 
-  let confidenceMessage = "Aucun signal majeur détecté.";
+let confidenceMessage = "Aucun signal majeur détecté.";
 
-  if (category === "Lien officiel probable") {
+if (category === "Communication commerciale légitime") {
+  confidenceMessage =
+    "Le message ressemble à une communication client légitime.";
+} else if (category === "Lien officiel probable") {
     confidenceMessage =
       "Le lien semble appartenir à un domaine officiel connu.";
   } else if (dominantProfile === "otp" && dominantScore >= 4) {
@@ -1084,14 +1092,21 @@ if (
       risk: "Faible",
       color: "emerald",
       score: finalScore,
-      alerts: alerts.length ? alerts : ["Aucun signal critique détecté."],
+      alerts:
+      category === "Communication commerciale légitime"
+    ? []
+    : displayedAlerts.length > 0
+      ? displayedAlerts
+      : ["Aucun signal critique détecté."],
       safeSignals,
       recommendation:
-        category === "Code de connexion"
-          ? "Ne partagez jamais ce code. Si vous n’êtes pas à l’origine de cette demande, changez votre mot de passe depuis le site officiel."
-          : category === "Lien officiel probable"
-            ? "Le lien semble correspondre à un domaine officiel connu. Vérifiez tout de même que vous êtes bien à l’origine de l’action."
-            : "Le contenu semble relativement sûr, mais restez vigilant.",
+      category === "Code de connexion"
+    ? "Ne partagez jamais ce code. Si vous n’êtes pas à l’origine de cette demande, changez votre mot de passe depuis le site officiel."
+    : category === "Lien officiel probable"
+      ? "Le lien semble correspondre à un domaine officiel connu. Vérifiez tout de même que vous êtes bien à l’origine de l’action."
+      : category === "Communication commerciale légitime"
+        ? "Cette communication semble provenir d'une marque légitime. Vérifiez simplement que vous attendiez bien cet email avant de cliquer."
+        : "Le contenu semble relativement sûr, mais restez vigilant.",
       technicalDetails,
       category,
       confidenceMessage,
@@ -1104,7 +1119,7 @@ if (
       risk: "Moyen",
       color: "yellow",
       score: finalScore,
-      alerts,
+      alerts: displayedAlerts,
       safeSignals,
       recommendation: looksLikeMarketingSms
         ? "Ne cliquez pas si vous n’êtes pas sûr de l’expéditeur. Utilisez le STOP si vous ne souhaitez plus recevoir ces SMS."
@@ -1121,7 +1136,7 @@ if (
       risk: "Élevé",
       color: "red",
       score: finalScore,
-      alerts,
+      alerts: displayedAlerts,
       safeSignals,
       recommendation:
         "Ne cliquez pas. Vérifiez l'information depuis le site officiel ou un canal connu.",
