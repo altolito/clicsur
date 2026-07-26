@@ -1,51 +1,31 @@
 /// <reference types="node" />
 
 export default async function handler(req: any, res: any) {
-  const rawUrl = process.env.VITE_SUPABASE_URL;
-  const rawKey = process.env.VITE_SUPABASE_ANON_KEY;
-
-  const url = rawUrl?.trim();
-  const anonKey = rawKey?.trim();
-
-  if (!url || !anonKey) {
-    return res.status(500).json({
-      error: "Variables Supabase manquantes",
-      hasUrl: Boolean(url),
-      hasKey: Boolean(anonKey),
-    });
-  }
-
   try {
-    const endpoint = new URL(
-      "/rest/v1/analyses?select=id&limit=1",
-      url
-    ).toString();
+    const url = process.env.VITE_SUPABASE_URL?.trim();
+    const anonKey = process.env.VITE_SUPABASE_ANON_KEY?.trim();
 
-    const response = await fetch(endpoint, {
-      method: "GET",
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-      },
-    });
+    if (!url || !anonKey) {
+      return res.status(500).json({ success: false });
+    }
 
-    const body = await response.text();
+    const response = await fetch(
+      `${url}/rest/v1/analyses?select=id&limit=1`,
+      {
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+        },
+      }
+    );
 
     return res.status(response.ok ? 200 : 500).json({
       success: response.ok,
-      status: response.status,
-      endpoint,
-      response: body,
+      timestamp: new Date().toISOString(),
     });
-  } catch (error: any) {
+  } catch {
     return res.status(500).json({
-      error: error.message,
-      cause: error.cause?.message ?? null,
-      code: error.cause?.code ?? null,
-      urlStart: url.slice(0, 30),
-      urlLength: url.length,
-      keyPresent: Boolean(anonKey),
-      keyLength: anonKey.length,
+      success: false,
     });
   }
 }
